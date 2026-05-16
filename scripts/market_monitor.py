@@ -57,72 +57,32 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-# ── Buy-target P/E table ──────────────────────────────────────────────────────
-BUY_TARGETS = {
-    "ALV":  {"name": "Allianz SE",             "curr": 8.93,  "amber": 8.0,  "red": 6.5},
-    "MUV2": {"name": "Munich Re",              "curr": 11.76, "amber": 10.0, "red": 8.5},
-    "HNR1": {"name": "Hannover Rück",          "curr": 13.0,  "amber": 11.0, "red": 9.0},
-    "CB":   {"name": "Chubb",                  "curr": 11.45, "amber": 10.0, "red": 8.0},
-    "CINF": {"name": "Cincinnati Financial",   "curr": 9.52,  "amber": 8.5,  "red": 7.0},
-    "TRV":  {"name": "Travelers",              "curr": 8.91,  "amber": 8.0,  "red": 6.5},
-    "PGR":  {"name": "Progressive",            "curr": 10.15, "amber": 9.0,  "red": 7.5},
-    "ACGL": {"name": "Arch Capital",           "curr": 7.21,  "amber": 6.5,  "red": 5.5},
-    "DB1":  {"name": "Deutsche Börse",         "curr": 20.0,  "amber": 17.0, "red": 14.0},
-    "USB":  {"name": "U.S. Bancorp",           "curr": 11.11, "amber": 10.0, "red": 8.0},
-    "MTB":  {"name": "M&T Bank",               "curr": 11.47, "amber": 10.0, "red": 8.0},
-    "WFC":  {"name": "Wells Fargo",            "curr": 11.33, "amber": 9.5,  "red": 8.0},
-    "SAP":  {"name": "SAP SE",                 "curr": 22.0,  "amber": 18.0, "red": 15.0},
-}
+# ── Watchlist — loaded from config/watchlist.json ────────────────────────────
+WATCHLIST_PATH = BASE_DIR / "config" / "watchlist.json"
 
-# ── Ticker → full company name (for readable alert messages) ─────────────────
-TICKER_NAMES = {
-    # S&P 500
-    "CB":   "Chubb",
-    "CINF": "Cincinnati Financial",
-    "TRV":  "Travelers",
-    "PGR":  "Progressive",
-    "ACGL": "Arch Capital",
-    "USB":  "U.S. Bancorp",
-    "MTB":  "M&T Bank",
-    "WFC":  "Wells Fargo",
-    "BAC":  "Bank of America",
-    # DAX
-    "ALV":  "Allianz SE",
-    "MUV2": "Munich Re",
-    "HNR1": "Hannover Rück",
-    "DB1":  "Deutsche Börse",
-    "DHL":  "DHL Group",
-    "RWE":  "RWE AG",
-    "SAP":  "SAP SE",
-    # ATX
-    "EBS":  "Erste Group",
-    "VIG":  "Vienna Insurance Group",
-    "OMV":  "OMV AG",
-    "RBI":  "Raiffeisen Bank",
-    "ANDR": "Andritz AG",
-    "EVN":  "EVN AG",
-}
+def _load_watchlist():
+    """Read watchlist.json and derive BUY_TARGETS, TICKER_NAMES, TICKER_YF, TICKER_INDEX."""
+    if not WATCHLIST_PATH.exists():
+        logging.warning(f"watchlist.json not found at {WATCHLIST_PATH} — watchlist empty")
+        return {}, {}, {}, {}
+    try:
+        with open(WATCHLIST_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        stocks = data.get("stocks", {})
+        buy_targets  = {t: {"name": s["name"], "curr": s["kgv_current"],
+                             "amber": s["kgv_amber"], "red": s["kgv_red"]}
+                        for t, s in stocks.items()}
+        ticker_names = {t: s["name"]       for t, s in stocks.items()}
+        ticker_yf    = {t: s["yf_symbol"]  for t, s in stocks.items()}
+        ticker_index = {t: s["index"]      for t, s in stocks.items()}
+        session = data.get("session", "unknown")
+        logging.info(f"Watchlist loaded from {session}: {len(stocks)} stocks")
+        return buy_targets, ticker_names, ticker_yf, ticker_index
+    except Exception as exc:
+        logging.warning(f"watchlist.json load failed: {exc} — watchlist empty")
+        return {}, {}, {}, {}
 
-# Maps display ticker → yfinance symbol (European stocks need exchange suffix)
-TICKER_YF = {
-    "CB": "CB", "CINF": "CINF", "TRV": "TRV", "PGR": "PGR",
-    "ACGL": "ACGL", "USB": "USB", "MTB": "MTB", "WFC": "WFC", "BAC": "BAC",
-    "ALV": "ALV.DE", "MUV2": "MUV2.DE", "HNR1": "HNR1.DE",
-    "DB1": "DB1.DE", "SAP": "SAP.DE", "DHL": "DHL.DE", "RWE": "RWE.DE",
-    "EBS": "EBS.VI", "VIG": "VIG.VI", "OMV": "OMV.VI",
-    "RBI": "RBI.VI", "ANDR": "ANDR.VI", "EVN": "EVN.VI",
-}
-
-TICKER_INDEX = {
-    # S&P 500
-    "CB": "S&P 500", "CINF": "S&P 500", "TRV": "S&P 500", "PGR": "S&P 500",
-    "ACGL": "S&P 500", "USB": "S&P 500", "MTB": "S&P 500", "WFC": "S&P 500", "BAC": "S&P 500",
-    # DAX
-    "ALV": "DAX", "MUV2": "DAX", "HNR1": "DAX", "DB1": "DAX", "DHL": "DAX", "RWE": "DAX",
-    "SAP": "DAX",
-    # ATX
-    "EBS": "ATX", "VIG": "ATX", "OMV": "ATX", "RBI": "ATX", "ANDR": "ATX", "EVN": "ATX",
-}
+BUY_TARGETS, TICKER_NAMES, TICKER_YF, TICKER_INDEX = _load_watchlist()
 
 # Unit suffix appended to numeric values in compact display strings
 INDICATOR_UNITS = {
