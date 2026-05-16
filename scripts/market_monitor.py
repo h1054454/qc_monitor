@@ -27,12 +27,13 @@ import requests
 import yfinance as yf
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-BASE_DIR         = Path(__file__).parent.parent        # QC_Monitor/
-CFG_PATH         = BASE_DIR / "config" / "monitor_config.json"
-LOG_PATH         = BASE_DIR / "logs"   / "monitor_log.txt"
-CSV_PATH         = BASE_DIR / "data"   / "indicator_history.csv"
-SUBSCRIBERS_PATH = BASE_DIR / "config" / "known_subscribers.json"
-STATUS_PATH      = BASE_DIR / "docs"    / "status.html"
+BASE_DIR             = Path(__file__).parent.parent        # QC_Monitor/
+CFG_PATH             = BASE_DIR / "config" / "monitor_config.json"
+LOG_PATH             = BASE_DIR / "logs"   / "monitor_log.txt"
+CSV_PATH             = BASE_DIR / "data"   / "indicator_history.csv"
+SUBSCRIBERS_PATH     = BASE_DIR / "config" / "known_subscribers.json"
+STATUS_PATH          = BASE_DIR / "docs"    / "status.html"
+MARKET_ANALYSIS_DIR  = BASE_DIR.parent / "market-analysis"   # TOOLS/market-analysis/
 
 CSV_COLUMNS = [
     "date",
@@ -1642,6 +1643,77 @@ def check_unsubscribe_requests_via_imap(cfg):
         return []
 
 
+# ── Analysis-session staleness check ─────────────────────────────────────────
+
+def check_watchlist_staleness(cfg):
+    """
+    Scan TOOLS/market-analysis/ for session folders newer than watchlist.json.
+    Sends a one-time Telegram reminder per new session; tracks via cfg.
+    """
+    import re
+    from datetime import date as date_cls
+
+    if not MARKET_ANALYSIS_DIR.exists():
+        return
+
+    date_re = re.compile(r"^(\d{4}-\d{2}-\d{2})")
+    session_dates = []
+    for item in MARKET_ANALYSIS_DIR.iterdir():
+        if item.is_dir():
+            m = date_re.match(item.name)
+            if m:
+                try:
+                    session_dates.append(date_cls.fromisoformat(m.group(1)))
+                except ValueError:
+                    pass
+
+    if not session_dates:
+        return
+
+    latest_session = max(session_dates)
+
+    # What date is the watchlist currently based on?
+    watchlist_date = None
+    if WATCHLIST_PATH.exists():
+        try:
+            with open(WATCHLIST_PATH, encoding="utf-8") as f:
+                wl = json.load(f)
+            lu = wl.get("last_updated", "")
+            if lu:
+                watchlist_date = date_cls.fromisoformat(lu)
+        except Exception:
+            pass
+
+    if watchlist_date and latest_session <= watchlist_date:
+        return  # Watchlist is up to date
+
+    # Already sent reminder for this exact session date?
+    last_reminded = cfg.get("last_watchlist_reminder_session", "")
+    if last_reminded == latest_session.isoformat():
+        return
+
+    # Send Telegram reminder
+    session_str   = latest_session.strftime("%d.%m.%Y")
+    watchlist_str = watchlist_date.strftime("%d.%m.%Y") if watchlist_date else "noch nie"
+    msg = (
+        f"📋 <b>Watchlist-Erinnerung</b>\n\n"
+        f"Neue Analyse-Session gefunden: <b>{session_str}</b>\n"
+        f"Watchlist zuletzt aktualisiert: {watchlist_str}\n\n"
+        f"<b>Was zu tun ist:</b>\n"
+        f"1. Analyse-Session in <code>market-analysis/{latest_session} Session/</code> reviewen\n"
+        f"2. <code>config/watchlist.json</code> mit neuen Aktien + KGV-Schwellenwerten updaten\n"
+        f"3. <code>last_updated</code> und <code>session</code> Felder in watchlist.json setzen\n"
+        f"4. Commit + Push → QC Monitor liest die neue Liste morgen früh automatisch"
+    )
+    send_telegram(cfg, msg)
+
+    # Remember we reminded about this session
+    cfg["last_watchlist_reminder_session"] = latest_session.isoformat()
+    save_cfg(cfg)
+    log.info(f"Watchlist staleness reminder sent for session {latest_session}")
+    print(f"[{datetime.now():%Y-%m-%d %H:%M}] Watchlist reminder sent: new session {latest_session}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -1660,6 +1732,9 @@ def main():
         print("Please add your Gmail App Password to monitor_config.json")
         log.error("Gmail App Password not configured")
         return
+
+    # Check if a newer analysis session exists than the current watchlist
+    check_watchlist_staleness(cfg)
 
     # Pull new subscribers from Formspree notification emails in Gmail
     new_from_form = check_new_subscribers_via_imap(cfg)
