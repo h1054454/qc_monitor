@@ -707,124 +707,79 @@ def _build_voice(alerts: list) -> str:
     )
 
 
-def _build_track_record(watchlist) -> str:
-    """Build a Track Record HTML section from indicator_history.csv + watchlist prices."""
-    import csv as csv_mod
-    from datetime import date as date_cls
-
-    if watchlist is None or not CSV_PATH.exists():
-        return ""
-
-    try:
-        with open(CSV_PATH, newline="", encoding="utf-8") as f:
-            rows = list(csv_mod.DictReader(f))
-    except Exception:
-        return ""
-
-    if not rows:
-        return ""
-
-    # Deduplicate by date, keep last row per date, sort chronologically
-    by_date: dict = {}
-    for r in rows:
-        by_date[r["date"]] = r
-    daily = sorted(by_date.values(), key=lambda r: r["date"])
-
-    # Find signal periods: runs of consecutive non-green overall days
-    periods = []
-    current_period = None
-    for row in daily:
-        overall = row.get("overall_level", "green")
-        d = row["date"]
-        if overall != "green":
-            if current_period is None:
-                triggered = {k for k, col in _INDICATOR_LEVEL_COL.items()
-                             if row.get(col, "green") != "green"}
-                current_period = {"start": d, "end": d, "triggered": triggered}
-            else:
-                current_period["end"] = d
-                current_period["triggered"].update(
-                    k for k, col in _INDICATOR_LEVEL_COL.items()
-                    if row.get(col, "green") != "green"
-                )
-        else:
-            if current_period is not None:
-                current_period["active"] = False
-                periods.append(current_period)
-                current_period = None
-
-    if current_period is not None:
-        current_period["active"] = True
-        periods.append(current_period)
-
-    if not periods:
+def _build_track_record(watchlist, closes=None) -> str:
+    """Build Track Record using real yfinance market data to find true signal start dates."""
+    if watchlist is None or closes is None:
         return ""
 
     rows_html = ""
-    for period in periods:
-        start  = period["start"]
-        end    = period["end"]
-        active = period.get("active", False)
+    for key, ind in INDICATORS.items():
+        ticker    = ind["ticker"]
+        check     = ind["check"]
+        amber_thr = ind["amber"]
 
-        try:
-            start_dt   = date_cls.fromisoformat(start)
-            end_dt     = date_cls.fromisoformat(end)
-            duration   = (end_dt - start_dt).days + 1
-        except Exception:
-            duration = 1
+        if ticker not in closes.columns:
+            continue
 
-        # Collect stocks from triggered indicators
-        stocks = set()
-        for key in period["triggered"]:
-            stocks.update(INDICATORS.get(key, {}).get("stocks", []))
+        series = closes[ticker].dropna()
+        if series.empty:
+            continue
 
-        # Signal label
-        triggered_labels = [
-            INDICATORS[k]["label"].split("(")[0].strip()
-            for k in period["triggered"] if k in INDICATORS
-        ]
-        signal_label = ", ".join(triggered_labels[:2]) + (" …" if len(triggered_labels) > 2 else "")
+        current_val  = float(series.iloc[-1])
+        is_triggered = (check == "above" and current_val >= amber_thr) or \
+                       (check == "below" and current_val <= amber_thr)
+        if not is_triggered:
+            continue
 
-        # Status cell
-        if active:
-            status_html = (
-                f'<span style="font-style:italic;color:#92400e">'
-                f'laufend seit {duration} Tag{"en" if duration != 1 else ""}</span>'
-            )
-        else:
-            status_html = f'<span style="color:#6b7280">{start} – {end}</span>'
+        # Walk backwards to find the real start of this elevated run
+        count = 0
+        for val in reversed(series.values):
+            crossed = (check == "above" and float(val) >= amber_thr) or \
+                      (check == "below" and float(val) <= amber_thr)
+            if crossed:
+                count += 1
+            else:
+                break
 
-        # Stock performance cells (max 4)
+        if count == 0:
+            continue
+
+        start_idx  = len(series) - count
+        start_date = series.index[start_idx]
+        start_str  = start_date.strftime("%d.%m.%Y") if hasattr(start_date, "strftime") else str(start_date)[:10]
+
+        label  = ind["label"].split("(")[0].strip()
+        stocks = ind.get("stocks", [])
+
         stock_cells = []
         for display_ticker in sorted(stocks)[:4]:
             yf_ticker = TICKER_YF.get(display_ticker)
             if not yf_ticker or yf_ticker not in watchlist.columns:
                 continue
-            series = watchlist[yf_ticker].dropna()
-            if series.empty:
+            wl = watchlist[yf_ticker].dropna()
+            if wl.empty:
                 continue
-            idx = series.index.searchsorted(start)
-            if idx >= len(series):
+            idx = wl.index.searchsorted(start_date)
+            if idx >= len(wl):
                 continue
-            start_price = float(series.iloc[idx])
-            today_price = float(series.iloc[-1])
+            start_price = float(wl.iloc[idx])
+            today_price = float(wl.iloc[-1])
             if start_price == 0:
                 continue
             ret   = (today_price - start_price) / start_price * 100
             color = "#15803d" if ret >= 0 else "#dc2626"
             sign  = "+" if ret >= 0 else ""
-            suffix = "&nbsp;(läuft)" if active else ""
             stock_cells.append(
                 f'<span style="color:{color};font-weight:600">'
-                f'{display_ticker} {sign}{ret:.1f}%{suffix}</span>'
+                f'{display_ticker} {sign}{ret:.1f}%</span>'
             )
 
         stocks_html = " &nbsp; ".join(stock_cells) if stock_cells else "—"
 
         rows_html += (
             f'<tr style="border-bottom:1px solid #e5e7eb">'
-            f'<td style="padding:8px 12px;font-size:13px;color:#374151;white-space:nowrap">{signal_label}</td>'
-            f'<td style="padding:8px 12px;font-size:13px">{status_html}</td>'
+            f'<td style="padding:8px 12px;font-size:13px;color:#374151;white-space:nowrap">{label}</td>'
+            f'<td style="padding:8px 12px;font-size:13px;color:#6b7280;white-space:nowrap">{start_str}</td>'
             f'<td style="padding:8px 12px;font-size:13px">{stocks_html}</td>'
             f'</tr>'
         )
@@ -847,7 +802,7 @@ def _build_track_record(watchlist) -> str:
         f'<th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:600;'
         f'font-size:12px;text-transform:uppercase">Seit</th>'
         f'<th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:600;'
-        f'font-size:12px;text-transform:uppercase">Auswahl Watchlist</th>'
+        f'font-size:12px;text-transform:uppercase">Watchlist seit Signal</th>'
         f'</tr></thead>'
         f'<tbody>{rows_html}</tbody>'
         f'</table></div></div>'
@@ -882,11 +837,19 @@ def build_html(alerts, closes, watchlist):
     header_color = LEVEL_COLOR[worst]
     header_label = LEVEL_LABEL[worst]
 
-    cards = ""
+    # ── Compact indicator cards (no stocks) + collect all active stocks ──────────
+    indicator_cards = ""
+    all_active_stocks: list = []
+    seen_stocks: set = set()
+
     for a in alerts:
-        c    = LEVEL_COLOR[a["level"]]
-        bg   = STOCK_COLORS[a["level"]]
-        rows = buy_target_rows(a["stocks"])
+        c = LEVEL_COLOR[a["level"]]
+
+        # Collect stocks for the aggregated section (preserving order, deduped)
+        for t in a.get("stocks", []):
+            if t not in seen_stocks:
+                all_active_stocks.append(t)
+                seen_stocks.add(t)
 
         # Vorausschau: trend extrapolation to next threshold (amber cards only)
         vorausschau_html = ""
@@ -902,7 +865,7 @@ def build_html(alerts, closes, watchlist):
                     days_to_red = _days_to_next_threshold(v_series, v_current, v_red, v_check)
                     if days_to_red is not None:
                         vorausschau_html = (
-                            f'<div style="font-size:13px;color:#6b7280;margin-top:10px;'
+                            f'<div style="font-size:13px;color:#6b7280;margin-top:12px;'
                             f'padding:8px 12px;background:#f8fafc;border-radius:4px">'
                             f'Bei aktuellem Trend: Kaufsignal in ca. {days_to_red} '
                             f'Tag{"en" if days_to_red != 1 else ""}.'
@@ -911,25 +874,14 @@ def build_html(alerts, closes, watchlist):
             except Exception:
                 pass
 
-        by_index: dict = {}
-        for t in a.get("stocks", []):
-            idx = TICKER_INDEX.get(t, "Sonstige")
-            by_index.setdefault(idx, []).append(TICKER_NAMES.get(t, t))
-        stock_lines = ""
-        for idx_name in ["S&P 500", "DAX", "ATX"]:
-            names = by_index.get(idx_name, [])
-            if names:
-                stock_lines += (
-                    f'<div style="margin-bottom:4px">'
-                    f'<span style="color:#6b7280;font-size:11px;text-transform:uppercase;'
-                    f'letter-spacing:.05em;font-weight:700">{idx_name}</span><br>'
-                    f'{", ".join(names)}'
-                    f'</div>'
-                )
-        news_url = a.get("news_url", "")
+        news_url  = a.get("news_url", "")
+        news_html = (
+            f'<div style="margin-top:10px"><a href="{news_url}" '
+            f'style="color:#0284c7;font-size:13px">→ Aktuelle Nachrichten</a></div>'
+        ) if news_url else ""
 
-        cards += f"""
-        <div style="background:#fff;border-radius:8px;margin:0 0 16px;
+        indicator_cards += f"""
+        <div style="background:#fff;border-radius:8px;margin:0 0 12px;
                     border-left:5px solid {c};box-shadow:0 1px 4px rgba(0,0,0,.07)">
           <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6">
             <span style="display:inline-block;background:{c};color:#fff;
@@ -960,24 +912,57 @@ def build_html(alerts, closes, watchlist):
               {a['scenario']}
             </div>
 
-            <div style="font-size:13px;color:#374151;margin-bottom:14px;line-height:1.7">
+            <div style="font-size:13px;color:#374151;line-height:1.7">
               <strong>Warum jetzt günstiger — ohne fundamentalen Grund:</strong><br>
               {a['why_discount']}
             </div>
 
-            <div style="font-size:13px;color:#374151;margin-bottom:14px">
-              <strong>Aktuell günstig:</strong>
-              <div style="margin-top:8px;line-height:2">{stock_lines}</div>
-              {"" if not news_url else
-               f'<div style="margin-top:8px"><a href="{news_url}" '
-               f'style="color:#0284c7;font-size:13px">→ Aktuelle Nachrichten</a></div>'}
-            </div>
+            {news_html}
+            {vorausschau_html}
 
+          </div>
+        </div>
+        """
+
+    # ── Aggregated "Aktuell günstig" section (all stocks from all active signals) ─
+    stocks_section = ""
+    if all_active_stocks:
+        worst_c  = LEVEL_COLOR[worst]
+        worst_bg = STOCK_COLORS[worst]
+        agg_rows = buy_target_rows(all_active_stocks)
+
+        by_index: dict = {}
+        for t in all_active_stocks:
+            idx_name = TICKER_INDEX.get(t, "Sonstige")
+            by_index.setdefault(idx_name, []).append(TICKER_NAMES.get(t, t))
+        stock_lines = ""
+        for idx_name in ["S&P 500", "DAX", "ATX"]:
+            names = by_index.get(idx_name, [])
+            if names:
+                stock_lines += (
+                    f'<div style="margin-bottom:4px">'
+                    f'<span style="color:#6b7280;font-size:11px;text-transform:uppercase;'
+                    f'letter-spacing:.05em;font-weight:700">{idx_name}</span><br>'
+                    f'{", ".join(names)}'
+                    f'</div>'
+                )
+
+        stocks_section = f"""
+        <div style="background:#fff;border-radius:8px;margin:0 0 16px;
+                    border-left:5px solid {worst_c};box-shadow:0 1px 4px rgba(0,0,0,.07)">
+          <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6">
+            <span style="font-size:13px;font-weight:700;color:#374151;
+                         text-transform:uppercase;letter-spacing:.07em">Aktuell günstig</span>
+          </div>
+          <div class="card-pad" style="padding:16px 18px">
+            <div style="font-size:13px;color:#374151;margin-bottom:14px;line-height:2">
+              {stock_lines}
+            </div>
             <div class="kgv-wrap" style="overflow-x:auto">
               <table style="width:100%;border-collapse:collapse;font-size:13px;
-                            background:{bg};border-radius:6px;overflow:hidden">
+                            background:{worst_bg};border-radius:6px;overflow:hidden">
                 <thead>
-                  <tr style="background:{c};color:white">
+                  <tr style="background:{worst_c};color:white">
                     <th style="padding:8px 10px;text-align:left;font-weight:600">Ticker</th>
                     <th style="padding:8px 10px;text-align:left;font-weight:600">Unternehmen</th>
                     <th style="padding:8px 10px;text-align:center;font-weight:600">Aktuelles KGV</th>
@@ -985,12 +970,9 @@ def build_html(alerts, closes, watchlist):
                     <th style="padding:8px 10px;text-align:center;font-weight:600">Kaufsignal</th>
                   </tr>
                 </thead>
-                <tbody>{rows}</tbody>
+                <tbody>{agg_rows}</tbody>
               </table>
             </div>
-
-            {vorausschau_html}
-
           </div>
         </div>
         """
@@ -1042,11 +1024,9 @@ def build_html(alerts, closes, watchlist):
         <td align="right" style="font-size:12px;color:#6b7280">{today} &nbsp;·&nbsp; {time_str} Uhr</td>
       </tr>
     </table>
-    <div class="header-title" style="margin-top:10px;font-size:22px;font-weight:800;
-         color:white;letter-spacing:-.01em">{header_label}</div>
-    <div style="margin-top:4px">
+    <div style="margin-top:10px">
       <span style="display:inline-block;background:{header_color};color:#fff;
-                   font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px;
+                   font-size:11px;font-weight:700;padding:4px 14px;border-radius:20px;
                    letter-spacing:.06em;text-transform:uppercase">
         {header_label}
       </span>
@@ -1061,12 +1041,17 @@ def build_html(alerts, closes, watchlist):
 
   <!-- Track Record -->
   <div style="padding:0 20px">
-    {_build_track_record(watchlist)}
+    {_build_track_record(watchlist, closes)}
   </div>
 
-  <!-- Cards -->
+  <!-- Indicator cards (compact, no stocks) -->
   <div style="padding:0 20px">
-    {cards}
+    {indicator_cards}
+  </div>
+
+  <!-- Aggregated stocks watchlist -->
+  <div style="padding:0 20px">
+    {stocks_section}
   </div>
 
   <!-- Manual check -->
