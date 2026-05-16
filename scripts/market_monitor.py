@@ -103,6 +103,16 @@ TICKER_NAMES = {
     "EVN":  "EVN AG",
 }
 
+# Maps display ticker → yfinance symbol (European stocks need exchange suffix)
+TICKER_YF = {
+    "CB": "CB", "CINF": "CINF", "TRV": "TRV", "PGR": "PGR",
+    "ACGL": "ACGL", "USB": "USB", "MTB": "MTB", "WFC": "WFC", "BAC": "BAC",
+    "ALV": "ALV.DE", "MUV2": "MUV2.DE", "HNR1": "HNR1.DE",
+    "DB1": "DB1.DE", "SAP": "SAP.DE", "DHL": "DHL.DE", "RWE": "RWE.DE",
+    "EBS": "EBS.VI", "VIG": "VIG.VI", "OMV": "OMV.VI",
+    "RBI": "RBI.VI", "ANDR": "ANDR.VI", "EVN": "EVN.VI",
+}
+
 TICKER_INDEX = {
     # S&P 500
     "CB": "S&P 500", "CINF": "S&P 500", "TRV": "S&P 500", "PGR": "S&P 500",
@@ -258,6 +268,20 @@ def fetch_price_data():
     return closes
 
 
+def fetch_watchlist_prices():
+    """Download 1 year of daily prices for all BUY_TARGETS watchlist stocks."""
+    yf_tickers = list(TICKER_YF.values())
+    log.info(f"Fetching watchlist prices for track record: {len(yf_tickers)} tickers")
+    try:
+        raw = yf.download(yf_tickers, period="1y", auto_adjust=True, progress=False)
+        if hasattr(raw.columns, "levels"):
+            return raw["Close"]
+        return raw[["Close"]]
+    except Exception as exc:
+        log.warning(f"Watchlist price fetch failed (track record unavailable): {exc}")
+        return None
+
+
 def get_current_and_history(closes, ticker):
     """Return (current_value, series) for a ticker column."""
     col = ticker if ticker in closes.columns else None
@@ -323,6 +347,19 @@ def _de_thr(val, unit=""):
     return f"{_de_num(val, 1)}{unit}"
 
 
+def _days_to_next_threshold(series, current, next_thr, direction):
+    """Extrapolate linear trend from last 7 days; return days to next threshold or None."""
+    if len(series) < 8:
+        return None
+    slope = (float(series.iloc[-1]) - float(series.iloc[-8])) / 7
+    if direction == "above" and slope <= 0:
+        return None
+    if direction == "below" and slope >= 0:
+        return None
+    days = abs((next_thr - current) / slope)
+    return round(days) if days <= 60 else None
+
+
 _INDICATOR_LEVEL_COL = {
     "VIX":       "vix_level",
     "KRE":       "kre_level",
@@ -362,35 +399,88 @@ def _consecutive_days(indicator_key: str) -> int:
         return 0
 
 
-def _build_intro(alerts: list) -> str:
-    """Build a dynamic German intro paragraph: duration + proximity to next threshold."""
+def _build_intro(alerts: list, closes) -> str:
+    """Build a dynamic German intro paragraph: yfinance duration + 7-day trend + proximity."""
     if not alerts:
         return ""
+
+    def _yf_days_above(ticker, threshold, check):
+        if closes is None or ticker not in closes.columns:
+            return None
+        try:
+            series = closes[ticker].dropna()
+            count = 0
+            for val in reversed(series.values):
+                crossed = (check == "above" and float(val) >= threshold) or \
+                          (check == "below" and float(val) <= threshold)
+                if crossed:
+                    count += 1
+                else:
+                    break
+            return count if count > 0 else None
+        except Exception:
+            return None
+
+    def _seven_day_delta(ticker):
+        if closes is None or ticker not in closes.columns:
+            return None
+        try:
+            series = closes[ticker].dropna()
+            if len(series) < 8:
+                return None
+            return float(series.iloc[-1]) - float(series.iloc[-8])
+        except Exception:
+            return None
 
     sentences = []
     for a in alerts:
         key   = a.get("key", "")
-        days  = _consecutive_days(key)
         label = a["label"]
         current_str = a.get("current", "")
 
+        ind       = INDICATORS.get(key, {})
+        ticker    = ind.get("ticker", "")
+        check     = ind.get("check", "above")
+        amber_thr = ind.get("amber")
+        red_thr   = ind.get("red")
+        unit_str  = INDICATOR_UNITS.get(key, "")
+
+        # Duration: prefer yfinance series, fall back to CSV
+        yf_days = _yf_days_above(ticker, amber_thr, check) if amber_thr is not None else None
+        days    = yf_days if yf_days is not None else _consecutive_days(key)
+
+        # 7-day trend sentence
+        delta = _seven_day_delta(ticker)
+        trend_sentence = ""
+        if delta is not None and abs(delta) > 0.001:
+            if key == "US10Y":
+                bp = abs(round(delta * 100))
+                direction = "Stieg" if delta > 0 else "Fiel"
+                trend_sentence = f" {direction} in 7 Tagen um {bp} Basispunkte."
+            elif key == "VIX":
+                direction = "Stieg" if delta > 0 else "Fiel"
+                trend_sentence = f" {direction} diese Woche um {_de_num(abs(delta), 1)} Punkte."
+            elif check == "below":
+                trend_sentence = f" Fiel weitere {_de_num(abs(delta), 1)}{unit_str} seit letzter Woche."
+            else:
+                direction = "Stieg" if delta > 0 else "Fiel"
+                trend_sentence = f" {direction} in 7 Tagen um {_de_num(abs(delta), 1)}{unit_str}."
+
         # Proximity: distance to buy-signal threshold
-        ind = INDICATORS.get(key, {})
-        red_thr  = ind.get("red")
-        unit_str = INDICATOR_UNITS.get(key, "")
         proximity = ""
         if red_thr is not None:
             proximity = f" — Kaufsignal ab {_de_thr(red_thr, unit_str)}"
-
         val_info = f"({current_str}{proximity})"
 
         if days <= 1:
             sentences.append(
-                f"<strong>{label}</strong> hat heute die Warnschwelle überschritten {val_info}."
+                f"<strong>{label}</strong> hat heute die Warnschwelle überschritten "
+                f"{val_info}.{trend_sentence}"
             )
         else:
             sentences.append(
-                f"<strong>{label}</strong> befindet sich seit {days} Tagen im erhöhten Bereich {val_info}."
+                f"<strong>{label}</strong> befindet sich seit {days} Tagen im erhöhten "
+                f"Bereich {val_info}.{trend_sentence}"
             )
 
     # Summary closing line
@@ -583,6 +673,186 @@ def write_to_csv(raw, alert_sent: bool):
 
 # ── Email builder ─────────────────────────────────────────────────────────────
 
+
+def _build_voice(alerts: list) -> str:
+    """Return a natural German opening sentence based on the current alert state."""
+    n_red   = sum(1 for a in alerts if a["level"] == "red")
+    n_amber = sum(1 for a in alerts if a["level"] == "amber")
+
+    if n_red > 0:
+        text = (
+            "Heute liegt eine klare Kaufgelegenheit vor: der Markt verkauft "
+            "Qualität aus Gründen, die nichts mit dem Unternehmenswert zu tun haben."
+        )
+    elif n_amber >= 3:
+        text = (
+            "Mehrere Indikatoren blinken gleichzeitig auf — das ist selten "
+            "und verdient volle Aufmerksamkeit."
+        )
+    elif n_amber == 2:
+        text = (
+            "Zwei Indikatoren signalisieren gleichzeitig makroökonomischen Druck "
+            "— die Wahrscheinlichkeit unfairer Kursrückgänge steigt."
+        )
+    else:
+        text = (
+            "Ein Indikator hat die Aufmerksamkeitsschwelle überschritten — noch kein "
+            "Handlungsbedarf, aber der Markt sendet ein erstes Warnsignal."
+        )
+
+    return (
+        f'<p style="font-size:15px;color:#111827;font-style:italic;margin:0 0 16px;'
+        f'line-height:1.7;border-left:3px solid #d1d5db;padding-left:14px">'
+        f'{text}</p>'
+    )
+
+
+def _build_track_record(watchlist) -> str:
+    """Build a Track Record HTML section from indicator_history.csv + watchlist prices."""
+    import csv as csv_mod
+    from datetime import date as date_cls
+
+    if watchlist is None or not CSV_PATH.exists():
+        return ""
+
+    try:
+        with open(CSV_PATH, newline="", encoding="utf-8") as f:
+            rows = list(csv_mod.DictReader(f))
+    except Exception:
+        return ""
+
+    if not rows:
+        return ""
+
+    # Deduplicate by date, keep last row per date, sort chronologically
+    by_date: dict = {}
+    for r in rows:
+        by_date[r["date"]] = r
+    daily = sorted(by_date.values(), key=lambda r: r["date"])
+
+    # Find signal periods: runs of consecutive non-green overall days
+    periods = []
+    current_period = None
+    for row in daily:
+        overall = row.get("overall_level", "green")
+        d = row["date"]
+        if overall != "green":
+            if current_period is None:
+                triggered = {k for k, col in _INDICATOR_LEVEL_COL.items()
+                             if row.get(col, "green") != "green"}
+                current_period = {"start": d, "end": d, "triggered": triggered}
+            else:
+                current_period["end"] = d
+                current_period["triggered"].update(
+                    k for k, col in _INDICATOR_LEVEL_COL.items()
+                    if row.get(col, "green") != "green"
+                )
+        else:
+            if current_period is not None:
+                current_period["active"] = False
+                periods.append(current_period)
+                current_period = None
+
+    if current_period is not None:
+        current_period["active"] = True
+        periods.append(current_period)
+
+    if not periods:
+        return ""
+
+    rows_html = ""
+    for period in periods:
+        start  = period["start"]
+        end    = period["end"]
+        active = period.get("active", False)
+
+        try:
+            start_dt   = date_cls.fromisoformat(start)
+            end_dt     = date_cls.fromisoformat(end)
+            duration   = (end_dt - start_dt).days + 1
+        except Exception:
+            duration = 1
+
+        # Collect stocks from triggered indicators
+        stocks = set()
+        for key in period["triggered"]:
+            stocks.update(INDICATORS.get(key, {}).get("stocks", []))
+
+        # Signal label
+        triggered_labels = [
+            INDICATORS[k]["label"].split("(")[0].strip()
+            for k in period["triggered"] if k in INDICATORS
+        ]
+        signal_label = ", ".join(triggered_labels[:2]) + (" …" if len(triggered_labels) > 2 else "")
+
+        # Status cell
+        if active:
+            status_html = (
+                f'<span style="font-style:italic;color:#92400e">'
+                f'laufend seit {duration} Tag{"en" if duration != 1 else ""}</span>'
+            )
+        else:
+            status_html = f'<span style="color:#6b7280">{start} – {end}</span>'
+
+        # Stock performance cells (max 4)
+        stock_cells = []
+        for display_ticker in sorted(stocks)[:4]:
+            yf_ticker = TICKER_YF.get(display_ticker)
+            if not yf_ticker or yf_ticker not in watchlist.columns:
+                continue
+            series = watchlist[yf_ticker].dropna()
+            if series.empty:
+                continue
+            idx = series.index.searchsorted(start)
+            if idx >= len(series):
+                continue
+            start_price = float(series.iloc[idx])
+            today_price = float(series.iloc[-1])
+            if start_price == 0:
+                continue
+            ret   = (today_price - start_price) / start_price * 100
+            color = "#15803d" if ret >= 0 else "#dc2626"
+            sign  = "+" if ret >= 0 else ""
+            suffix = "&nbsp;(läuft)" if active else ""
+            stock_cells.append(
+                f'<span style="color:{color};font-weight:600">'
+                f'{display_ticker} {sign}{ret:.1f}%{suffix}</span>'
+            )
+
+        stocks_html = " &nbsp; ".join(stock_cells) if stock_cells else "—"
+
+        rows_html += (
+            f'<tr style="border-bottom:1px solid #e5e7eb">'
+            f'<td style="padding:8px 12px;font-size:13px;color:#374151;white-space:nowrap">{signal_label}</td>'
+            f'<td style="padding:8px 12px;font-size:13px">{status_html}</td>'
+            f'<td style="padding:8px 12px;font-size:13px">{stocks_html}</td>'
+            f'</tr>'
+        )
+
+    if not rows_html:
+        return ""
+
+    return (
+        f'<div style="background:#fff;border-radius:8px;border-left:5px solid #6366f1;'
+        f'box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:16px">'
+        f'<div style="padding:14px 18px;border-bottom:1px solid #f3f4f6">'
+        f'<span style="font-size:13px;font-weight:700;color:#374151;'
+        f'text-transform:uppercase;letter-spacing:.07em">Track Record</span>'
+        f'</div>'
+        f'<div style="overflow-x:auto">'
+        f'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+        f'<thead><tr style="background:#f8fafc">'
+        f'<th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:600;'
+        f'font-size:12px;text-transform:uppercase">Signal</th>'
+        f'<th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:600;'
+        f'font-size:12px;text-transform:uppercase">Seit</th>'
+        f'<th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:600;'
+        f'font-size:12px;text-transform:uppercase">Auswahl Watchlist</th>'
+        f'</tr></thead>'
+        f'<tbody>{rows_html}</tbody>'
+        f'</table></div></div>'
+    )
+
 LEVEL_COLOR  = {"amber": "#f59e0b", "red": "#16a34a"}   # green = buy signal
 LEVEL_LABEL  = {"amber": "BEOBACHTEN", "red": "KAUFSIGNAL"}
 STOCK_COLORS = {"amber": "#fef3c7", "red": "#dcfce7"}   # light green for buy
@@ -605,7 +875,7 @@ def buy_target_rows(stock_tickers):
     return rows
 
 
-def build_html(alerts):
+def build_html(alerts, closes, watchlist):
     today        = _de_date()
     time_str     = datetime.now().strftime("%H:%M")
     worst        = "red" if any(a["level"] == "red" for a in alerts) else "amber"
@@ -617,6 +887,29 @@ def build_html(alerts):
         c    = LEVEL_COLOR[a["level"]]
         bg   = STOCK_COLORS[a["level"]]
         rows = buy_target_rows(a["stocks"])
+
+        # Vorausschau: trend extrapolation to next threshold (amber cards only)
+        vorausschau_html = ""
+        if a["level"] == "amber" and closes is not None:
+            try:
+                v_ind    = INDICATORS.get(a.get("key", ""), {})
+                v_ticker = v_ind.get("ticker", "")
+                v_check  = v_ind.get("check", "above")
+                v_red    = v_ind.get("red")
+                if v_ticker and v_red is not None and v_ticker in closes.columns:
+                    v_series  = closes[v_ticker].dropna()
+                    v_current = float(v_series.iloc[-1])
+                    days_to_red = _days_to_next_threshold(v_series, v_current, v_red, v_check)
+                    if days_to_red is not None:
+                        vorausschau_html = (
+                            f'<div style="font-size:13px;color:#6b7280;margin-top:10px;'
+                            f'padding:8px 12px;background:#f8fafc;border-radius:4px">'
+                            f'Bei aktuellem Trend: Kaufsignal in ca. {days_to_red} '
+                            f'Tag{"en" if days_to_red != 1 else ""}.'
+                            f'</div>'
+                        )
+            except Exception:
+                pass
 
         by_index: dict = {}
         for t in a.get("stocks", []):
@@ -696,6 +989,8 @@ def build_html(alerts):
               </table>
             </div>
 
+            {vorausschau_html}
+
           </div>
         </div>
         """
@@ -738,13 +1033,15 @@ def build_html(alerts):
 <body>
 <div class="wrapper">
 
-  <!-- Header -->
+  <!-- Header (table layout for Outlook compatibility) -->
   <div style="background:#111827;padding:18px 24px;border-radius:0 0 0 0">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <div style="font-size:12px;font-weight:700;letter-spacing:.12em;color:#9ca3af;
-                  text-transform:uppercase">Markt-Monitor</div>
-      <div style="font-size:12px;color:#6b7280">{today} &nbsp;·&nbsp; {time_str} Uhr</div>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td style="font-size:12px;font-weight:700;letter-spacing:.12em;color:#9ca3af;
+                   text-transform:uppercase">MARKT-MONITOR</td>
+        <td align="right" style="font-size:12px;color:#6b7280">{today} &nbsp;·&nbsp; {time_str} Uhr</td>
+      </tr>
+    </table>
     <div class="header-title" style="margin-top:10px;font-size:22px;font-weight:800;
          color:white;letter-spacing:-.01em">{header_label}</div>
     <div style="margin-top:4px">
@@ -756,9 +1053,15 @@ def build_html(alerts):
     </div>
   </div>
 
-  <!-- Intro -->
+  <!-- Voice + Intro -->
   <div style="padding:20px 20px 4px">
-    {_build_intro(alerts)}
+    {_build_voice(alerts)}
+    {_build_intro(alerts, closes)}
+  </div>
+
+  <!-- Track Record -->
+  <div style="padding:0 20px">
+    {_build_track_record(watchlist)}
   </div>
 
   <!-- Cards -->
@@ -1375,13 +1678,15 @@ def main():
         log.error(f"Data fetch failed: {exc}")
         return
 
+    watchlist = fetch_watchlist_prices()
+
     alerts, all_statuses, raw = evaluate(closes)
 
     # Always write to CSV -every run, green or not
     alert_sent = False
     if alerts:
         subject = build_subject(alerts)
-        html    = build_html(alerts)
+        html    = build_html(alerts, closes, watchlist)
         tg_msg  = build_telegram_message(alerts, all_statuses)
 
         # Email (rich HTML report)
