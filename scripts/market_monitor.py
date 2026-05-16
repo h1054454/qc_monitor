@@ -43,6 +43,9 @@ CSV_COLUMNS = [
     "overall_level", "alert_sent",
 ]
 
+LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     filename=LOG_PATH,
     level=logging.INFO,
