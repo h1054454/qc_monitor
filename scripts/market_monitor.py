@@ -302,6 +302,15 @@ def check_atlantic_hurricanes():
 
 # ── Threshold evaluation ──────────────────────────────────────────────────────
 
+_MONTHS_DE = ["Januar","Februar","März","April","Mai","Juni",
+              "Juli","August","September","Oktober","November","Dezember"]
+_DAYS_DE   = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"]
+
+def _de_date():
+    d = datetime.now()
+    return f"{_DAYS_DE[d.weekday()]}, {d.day}. {_MONTHS_DE[d.month - 1]} {d.year}"
+
+
 def _de_num(val, decimals=2):
     """Float → German decimal comma (e.g. 4.60 → '4,60')."""
     return f"{val:.{decimals}f}".replace(".", ",")
@@ -312,6 +321,96 @@ def _de_thr(val, unit=""):
     if isinstance(val, int):
         return f"{val}{unit}"
     return f"{_de_num(val, 1)}{unit}"
+
+
+_INDICATOR_LEVEL_COL = {
+    "VIX":       "vix_level",
+    "KRE":       "kre_level",
+    "QQQ":       "qqq_level",
+    "NVDA":      "nvda_level",
+    "BRENT_HIGH":"brent_high_level",
+    "BRENT_LOW": "brent_low_level",
+    "US10Y":     "us10y_level",
+    "HURRICANE": "hurricane_level",
+}
+
+
+def _consecutive_days(indicator_key: str) -> int:
+    """Return how many consecutive days this indicator has been non-green in the CSV."""
+    import csv as csv_mod
+    col = _INDICATOR_LEVEL_COL.get(indicator_key)
+    if not col or not CSV_PATH.exists():
+        return 0
+    try:
+        with open(CSV_PATH, newline="", encoding="utf-8") as f:
+            rows = list(csv_mod.DictReader(f))
+        if not rows:
+            return 0
+        # Deduplicate: keep last row per date
+        by_date: dict = {}
+        for r in rows:
+            by_date[r["date"]] = r
+        daily = list(by_date.values())
+        count = 0
+        for row in reversed(daily):
+            if row.get(col, "green") != "green":
+                count += 1
+            else:
+                break
+        return count
+    except Exception:
+        return 0
+
+
+def _build_intro(alerts: list) -> str:
+    """Build a dynamic German intro paragraph: duration + proximity to next threshold."""
+    if not alerts:
+        return ""
+
+    sentences = []
+    for a in alerts:
+        key   = a.get("key", "")
+        days  = _consecutive_days(key)
+        label = a["label"]
+        current_str = a.get("current", "")
+
+        # Proximity: distance to buy-signal threshold
+        ind = INDICATORS.get(key, {})
+        red_thr  = ind.get("red")
+        unit_str = INDICATOR_UNITS.get(key, "")
+        proximity = ""
+        if red_thr is not None:
+            proximity = f" — Kaufsignal ab {_de_thr(red_thr, unit_str)}"
+
+        val_info = f"({current_str}{proximity})"
+
+        if days <= 1:
+            sentences.append(
+                f"<strong>{label}</strong> hat heute die Warnschwelle überschritten {val_info}."
+            )
+        else:
+            sentences.append(
+                f"<strong>{label}</strong> befindet sich seit {days} Tagen im erhöhten Bereich {val_info}."
+            )
+
+    # Summary closing line
+    total = len(INDICATORS) + 1  # +1 for hurricane
+    inactive = total - len(alerts)
+    if inactive > 0:
+        if inactive == 1:
+            closing = "1 weiterer Indikator unauffällig."
+        elif inactive == total - 1:
+            closing = "Alle anderen Indikatoren zeigen keine erhöhten Werte."
+        else:
+            closing = f"{inactive} weitere Indikatoren unauffällig."
+    else:
+        closing = "Alle überwachten Indikatoren sind aktiv."
+
+    body = " ".join(sentences) + f" {closing}"
+    return (
+        f'<p style="font-size:14px;color:#374151;margin:0 0 20px;line-height:1.7">'
+        f'{body}</p>'
+    )
 
 
 def evaluate(closes):
@@ -341,8 +440,8 @@ def evaluate(closes):
 
         if check == "above":
             level = "red" if current >= red_thr else ("amber" if current >= amber_thr else "green")
-            display_current   = f"{current:.2f}"
-            display_threshold = f"Amber ≥ {amber_thr} | Red ≥ {red_thr}"
+            display_current   = f"{_de_num(current)}{unit}"
+            display_threshold = f"Beobachten ab {_de_thr(amber_thr, unit)} | Kaufsignal ab {_de_thr(red_thr, unit)}"
             compact = (
                 f"{_de_num(current)}{unit} - "
                 f"Gelb ab {_de_thr(amber_thr, unit)}, Rot ab {_de_thr(red_thr, unit)}"
@@ -350,27 +449,27 @@ def evaluate(closes):
 
         elif check == "below":
             level = "red" if current <= red_thr else ("amber" if current <= amber_thr else "green")
-            display_current   = f"${current:.2f}"
-            display_threshold = f"Amber ≤ {amber_thr} | Red ≤ {red_thr}"
+            display_current   = f"{_de_num(current)}{unit}"
+            display_threshold = f"Beobachten unter {_de_thr(amber_thr, unit)} | Kaufsignal unter {_de_thr(red_thr, unit)}"
             compact = (
                 f"{_de_num(current)}{unit} - "
-                f"Gelb <= {_de_thr(amber_thr, unit)}, Rot <= {_de_thr(red_thr, unit)}"
+                f"Gelb unter {_de_thr(amber_thr, unit)}, Rot unter {_de_thr(red_thr, unit)}"
             )
 
         elif check in ("drop_52w", "drop_14d"):
             if check == "drop_52w":
-                reference  = float(series.max())
-                ref_label  = "52w high"
+                reference    = float(series.max())
                 ref_label_de = "vom 52W-Hoch"
+                ref_period   = "52W-Hoch"
             else:
-                lookback   = min(14, len(series) - 1)
-                reference  = float(series.iloc[-(lookback + 1)])
-                ref_label  = "14 days ago"
+                lookback     = min(14, len(series) - 1)
+                reference    = float(series.iloc[-(lookback + 1)])
                 ref_label_de = "in 14 Tagen"
+                ref_period   = "14-Tage-Hoch"
             pct_change = (current - reference) / reference * 100 if reference else 0.0
             level = "red" if pct_change <= red_thr else ("amber" if pct_change <= amber_thr else "green")
-            display_current   = f"{pct_change:+.1f}% from {ref_label} ({ref_label}: ${reference:.2f} -> now: ${current:.2f})"
-            display_threshold = f"Amber <= {amber_thr}% | Red <= {red_thr}%"
+            display_current   = f"{_de_num(pct_change, 1)}% {ref_label_de} ({ref_period}: {_de_num(reference)} | Aktuell: {_de_num(current)})"
+            display_threshold = f"Beobachten ab {_de_thr(amber_thr)}% | Kaufsignal ab {_de_thr(red_thr)}%"
             compact = (
                 f"{_de_num(pct_change, 1)}% {ref_label_de} - "
                 f"Gelb ab {_de_thr(amber_thr)}%, Rot ab {_de_thr(red_thr)}%"
@@ -500,119 +599,193 @@ def buy_target_rows(stock_tickers):
             f"<td style='padding:4px 10px'>{b['name']}</td>"
             f"<td style='padding:4px 10px;text-align:center'>{b['curr']:.2f}x</td>"
             f"<td style='padding:4px 10px;text-align:center;color:#b45309'>{b['amber']:.1f}x</td>"
-            f"<td style='padding:4px 10px;text-align:center;color:#dc2626;font-weight:bold'>{b['red']:.1f}x</td>"
+            f"<td style='padding:4px 10px;text-align:center;color:#15803d;font-weight:bold'>{b['red']:.1f}x</td>"
             f"</tr>"
         )
     return rows
 
 
 def build_html(alerts):
-    today = datetime.now().strftime("%A, %d %B %Y")
-    worst = "red" if any(a["level"] == "red" for a in alerts) else "amber"
+    today        = _de_date()
+    time_str     = datetime.now().strftime("%H:%M")
+    worst        = "red" if any(a["level"] == "red" for a in alerts) else "amber"
     header_color = LEVEL_COLOR[worst]
     header_label = LEVEL_LABEL[worst]
 
     cards = ""
     for a in alerts:
-        c = LEVEL_COLOR[a["level"]]
-        bg = STOCK_COLORS[a["level"]]
+        c    = LEVEL_COLOR[a["level"]]
+        bg   = STOCK_COLORS[a["level"]]
         rows = buy_target_rows(a["stocks"])
 
-        cards += f"""
-        <div style="border:2px solid {c};border-radius:8px;margin:20px 0;overflow:hidden">
-          <div style="background:{c};color:white;padding:12px 16px;font-size:16px;font-weight:bold">
-            {LEVEL_LABEL[a['level']]} &nbsp;|&nbsp; {a['label']}
-          </div>
-          <div style="padding:16px;background:#fff">
+        by_index: dict = {}
+        for t in a.get("stocks", []):
+            idx = TICKER_INDEX.get(t, "Sonstige")
+            by_index.setdefault(idx, []).append(TICKER_NAMES.get(t, t))
+        stock_lines = ""
+        for idx_name in ["S&P 500", "DAX", "ATX"]:
+            names = by_index.get(idx_name, [])
+            if names:
+                stock_lines += (
+                    f'<div style="margin-bottom:4px">'
+                    f'<span style="color:#6b7280;font-size:11px;text-transform:uppercase;'
+                    f'letter-spacing:.05em;font-weight:700">{idx_name}</span><br>'
+                    f'{", ".join(names)}'
+                    f'</div>'
+                )
+        news_url = a.get("news_url", "")
 
-            <table style="margin-bottom:12px">
+        cards += f"""
+        <div style="background:#fff;border-radius:8px;margin:0 0 16px;
+                    border-left:5px solid {c};box-shadow:0 1px 4px rgba(0,0,0,.07)">
+          <div style="padding:14px 18px;border-bottom:1px solid #f3f4f6">
+            <span style="display:inline-block;background:{c};color:#fff;
+                         font-size:11px;font-weight:700;letter-spacing:.07em;
+                         text-transform:uppercase;padding:3px 10px;border-radius:20px">
+              {LEVEL_LABEL[a['level']]}
+            </span>
+            <span style="font-size:16px;font-weight:700;color:#111827;margin-left:10px">
+              {a['label']}
+            </span>
+          </div>
+          <div class="card-pad" style="padding:16px 18px">
+
+            <table style="margin-bottom:14px;font-size:13px">
               <tr>
-                <td style="padding:4px 12px 4px 0;color:#6b7280;font-size:13px">Aktueller Wert</td>
-                <td style="padding:4px 0;font-weight:bold">{a['current']}</td>
+                <td style="padding:3px 14px 3px 0;color:#9ca3af;white-space:nowrap">Aktueller Wert</td>
+                <td style="padding:3px 0;font-weight:700;color:#111827">{a['current']}</td>
               </tr>
               <tr>
-                <td style="padding:4px 12px 4px 0;color:#6b7280;font-size:13px">Schwellenwerte</td>
-                <td style="padding:4px 0">{a['threshold']}</td>
+                <td style="padding:3px 14px 3px 0;color:#9ca3af;white-space:nowrap">Schwellenwerte</td>
+                <td style="padding:3px 0;color:#374151">{a['threshold']}</td>
               </tr>
             </table>
 
-            <div style="background:#f8fafc;border-left:4px solid {c};padding:10px 14px;margin-bottom:14px;font-size:14px">
-              <strong>Was das bedeutet:</strong> {a['scenario']}
+            <div style="background:#f8fafc;border-left:4px solid {c};
+                        padding:10px 14px;margin-bottom:14px;font-size:14px;
+                        color:#374151;line-height:1.6;border-radius:0 4px 4px 0">
+              {a['scenario']}
             </div>
 
-            <div style="font-size:14px;margin-bottom:14px;color:#374151">
-              <strong>Warum diese Aktien ohne fundamentalen Grund günstiger werden:</strong><br>
+            <div style="font-size:13px;color:#374151;margin-bottom:14px;line-height:1.7">
+              <strong>Warum jetzt günstiger — ohne fundamentalen Grund:</strong><br>
               {a['why_discount']}
             </div>
 
-            <div style="font-size:13px;margin-bottom:14px;color:#374151">
-              <strong>Günstig:</strong>
-              {", ".join(TICKER_NAMES.get(t, t) for t in a["stocks"])}
-              &nbsp;&nbsp;
-              <a href="{a.get("news_url","#")}" style="color:#0284c7">→ Aktuelle Nachrichten</a>
+            <div style="font-size:13px;color:#374151;margin-bottom:14px">
+              <strong>Aktuell günstig:</strong>
+              <div style="margin-top:8px;line-height:2">{stock_lines}</div>
+              {"" if not news_url else
+               f'<div style="margin-top:8px"><a href="{news_url}" '
+               f'style="color:#0284c7;font-size:13px">→ Aktuelle Nachrichten</a></div>'}
             </div>
 
-            <table style="width:100%;border-collapse:collapse;font-size:13px;background:{bg}">
-              <thead>
-                <tr style="background:{c};color:white">
-                  <th style="padding:6px 10px;text-align:left">Ticker</th>
-                  <th style="padding:6px 10px;text-align:left">Unternehmen</th>
-                  <th style="padding:6px 10px;text-align:center">Akt. KGV</th>
-                  <th style="padding:6px 10px;text-align:center">Gelb-Kauf</th>
-                  <th style="padding:6px 10px;text-align:center">Rot-Kauf</th>
-                </tr>
-              </thead>
-              <tbody>{rows}</tbody>
-            </table>
+            <div class="kgv-wrap" style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:13px;
+                            background:{bg};border-radius:6px;overflow:hidden">
+                <thead>
+                  <tr style="background:{c};color:white">
+                    <th style="padding:8px 10px;text-align:left;font-weight:600">Ticker</th>
+                    <th style="padding:8px 10px;text-align:left;font-weight:600">Unternehmen</th>
+                    <th style="padding:8px 10px;text-align:center;font-weight:600">Aktuelles KGV</th>
+                    <th style="padding:8px 10px;text-align:center;font-weight:600">Beobachten</th>
+                    <th style="padding:8px 10px;text-align:center;font-weight:600">Kaufsignal</th>
+                  </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+              </table>
+            </div>
 
           </div>
         </div>
         """
 
     manual_check = """
-    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:12px 16px;margin-top:20px;font-size:13px">
-      <strong>📋 Manuelle Prüfung empfohlen:</strong> &nbsp;
-      <a href="https://tradingeconomics.com/italy/government-bond-yield" style="color:#0284c7">
-        BTP-Bund Spread (Italien vs. Deutschland 10J)
-      </a>
-      -Alarm bei Spread &gt; 200bp (gelb) oder &gt; 300bp (rot). DAX breit gefährdet bei Rot.
+    <div style="background:#fff;border-radius:8px;border-left:5px solid #e5e7eb;
+                box-shadow:0 1px 4px rgba(0,0,0,.07);padding:16px 18px;margin-top:8px">
+      <div style="font-size:13px;font-weight:700;color:#374151;text-transform:uppercase;
+                  letter-spacing:.05em;margin-bottom:8px">Weiterer Indikator auf dem Radar</div>
+      <p style="font-size:13px;color:#374151;margin:0 0 8px;line-height:1.7">
+        Der <strong>BTP-Bund-Spread</strong> misst die Risikoprämie für italienische
+        Staatsanleihen gegenüber deutschen Bundesanleihen. Steigt er über 200 Basispunkte,
+        signalisiert das erhöhten Stress im Euroraum — DAX-Aktien werden dann oft pauschal
+        abgestraft, unabhängig von ihrer Qualität.
+      </p>
+      <p style="font-size:13px;color:#6b7280;margin:0">
+        Aktuell: Keine erhöhte Risikoprämie. &nbsp;
+        <a href="https://tradingeconomics.com/italy/government-bond-yield"
+           style="color:#0284c7">→ Aktueller Stand</a>
+      </p>
     </div>
     """
 
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"></head>
-    <body style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px;color:#1f2937">
+    html = f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {{ margin:0; padding:0; background:#f3f4f6; font-family:Arial,sans-serif; color:#1f2937; }}
+    .wrapper {{ max-width:640px; margin:0 auto; background:#f3f4f6; padding:0 0 32px; }}
+    .kgv-wrap {{ overflow-x:auto; }}
+    @media (max-width:600px) {{
+      .card-pad {{ padding:14px !important; }}
+      .header-title {{ font-size:16px !important; }}
+      td, th {{ font-size:12px !important; padding:5px 6px !important; }}
+    }}
+  </style>
+</head>
+<body>
+<div class="wrapper">
 
-      <div style="background:{header_color};color:white;border-radius:8px;padding:18px 22px;margin-bottom:24px">
-        <div style="font-size:20px;font-weight:bold">{header_label}</div>
-        <div style="font-size:14px;margin-top:4px;opacity:.9">Markt-Frühwarnsystem &nbsp;|&nbsp; {today}</div>
-      </div>
+  <!-- Header -->
+  <div style="background:#111827;padding:18px 24px;border-radius:0 0 0 0">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.12em;color:#9ca3af;
+                  text-transform:uppercase">Markt-Monitor</div>
+      <div style="font-size:12px;color:#6b7280">{today} &nbsp;·&nbsp; {time_str} Uhr</div>
+    </div>
+    <div class="header-title" style="margin-top:10px;font-size:22px;font-weight:800;
+         color:white;letter-spacing:-.01em">{header_label}</div>
+    <div style="margin-top:4px">
+      <span style="display:inline-block;background:{header_color};color:#fff;
+                   font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px;
+                   letter-spacing:.06em;text-transform:uppercase">
+        {header_label}
+      </span>
+    </div>
+  </div>
 
-      <p style="font-size:14px;color:#374151;margin-bottom:4px">
-        Ein oder mehrere Indikatoren haben eine Warnstufe erreicht.
-        Das sind keine Prognosen -es sind Signale, dass bestimmte Aktien aus Gründen
-        verkauft werden, die nichts mit ihrer fundamentalen Unternehmensqualität zu tun haben.
-      </p>
+  <!-- Intro -->
+  <div style="padding:20px 20px 4px">
+    {_build_intro(alerts)}
+  </div>
 
-      {cards}
+  <!-- Cards -->
+  <div style="padding:0 20px">
+    {cards}
+  </div>
 
-      {manual_check}
+  <!-- Manual check -->
+  <div style="padding:0 20px">
+    {manual_check}
+  </div>
 
-      <div style="margin-top:28px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af">
-        Erstellt von market_monitor.py &nbsp;|&nbsp; Ausgeführt um {datetime.now().strftime('%H:%M')} &nbsp;|&nbsp;
-        <a href="file:///{BASE_DIR}" style="color:#9ca3af">Analyseordner öffnen</a>
-      </div>
+  <!-- Footer -->
+  <div style="padding:24px 20px 0;border-top:1px solid #e5e7eb;margin:24px 20px 0;
+              font-size:12px;color:#9ca3af;line-height:1.9">
+    Markt-Monitor &nbsp;·&nbsp; stefan.steinberger16@gmail.com<br>
+    Zum Abmelden einfach auf diese E-Mail antworten.
+  </div>
 
-    </body>
-    </html>
-    """
+</div>
+</body>
+</html>"""
     return html
 
 
 def build_subject(alerts):
-    worst = "ROT" if any(a["level"] == "red" for a in alerts) else "GELB"
+    worst = "KAUFSIGNAL" if any(a["level"] == "red" for a in alerts) else "BEOBACHTEN"
     labels = [a["label"].split("(")[0].strip() for a in alerts]
     summary = ", ".join(labels[:2]) + (" + mehr" if len(labels) > 2 else "")
     return f"[Markt-Monitor] {worst} - {summary}"
