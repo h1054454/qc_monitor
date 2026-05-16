@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markt-Monitor - Frühwarnsystem für Langzeit-Investoren</title>
+  <meta name="description" content="Kostenloser privater Newsletter nach den Prinzipien von Warren Buffett und Charlie Munger. Täglich 7 Makro-Indikatoren - du wirst benachrichtigt, wenn Qualitätsaktien aus den falschen Gründen günstig werden.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      color: #1f2937;
+      background: #f9fafb;
+      line-height: 1.6;
+    }
+
+    /* ── Layout ── */
+    .container { max-width: 780px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Nav ── */
+    nav {
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 16px 0;
+    }
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      font-weight: 700;
+      font-size: 16px;
+      color: #16a34a;
+    }
+    .nav-logo span { color: #1f2937; }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, #15803d 0%, #16a34a 60%, #22c55e 100%);
+      color: white;
+      padding: 72px 0 64px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      letter-spacing: -0.5px;
+    }
+    .hero p {
+      font-size: clamp(15px, 2.5vw, 18px);
+      opacity: .92;
+      max-width: 580px;
+      margin: 0 auto 36px;
+      line-height: 1.7;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,.18);
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 999px;
+      padding: 6px 18px;
+      font-size: 13px;
+      margin-bottom: 28px;
+      letter-spacing: .3px;
+    }
+
+    /* ── Signup card ── */
+    .signup-card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 480px;
+      margin: 0 auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,.18);
+    }
+    .signup-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+    .signup-card p {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .signup-card input[type="email"] {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 15px;
+      margin-bottom: 12px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .signup-card input[type="email"]:focus { border-color: #16a34a; }
+    .btn-green {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      background: #16a34a;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+      transition: background .2s;
+    }
+    .btn-green:hover { background: #15803d; }
+    .signup-note {
+      font-size: 12px;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    /* ── Sections ── */
+    section { padding: 72px 0; }
+    section:nth-child(even) { background: white; }
+    h2 {
+      font-size: clamp(22px, 4vw, 32px);
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 12px;
+      letter-spacing: -.3px;
+    }
+    .section-sub {
+      font-size: 17px;
+      color: #6b7280;
+      margin-bottom: 40px;
+      max-width: 560px;
+    }
+
+    /* ── Philosophy quote ── */
+    .quote-block {
+      background: #f0fdf4;
+      border-left: 4px solid #16a34a;
+      border-radius: 0 8px 8px 0;
+      padding: 20px 24px;
+      font-size: 17px;
+      font-style: italic;
+      color: #166534;
+      line-height: 1.7;
+      margin: 32px 0;
+    }
+
+    /* ── Signal boxes ── */
+    .signals {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 32px;
+    }
+    .signal-box {
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+    }
+    .signal-box .icon { font-size: 36px; margin-bottom: 8px; }
+    .signal-box h4 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .signal-box p { font-size: 13px; color: #4b5563; line-height: 1.5; }
+    .signal-normal { background: #f3f4f6; }
+    .signal-watch  { background: #fef9c3; }
+    .signal-buy    { background: #dcfce7; }
+
+    /* ── Indicators grid ── */
+    .indicators { display: flex; flex-direction: column; gap: 0; margin-top: 32px; border-radius: 10px; overflow: hidden; border: 1px solid #e5e7eb; }
+    .indicator-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 18px 20px;
+      border-bottom: 1px solid #e5e7eb;
+      background: white;
+    }
+    .indicator-row:last-child { border-bottom: none; }
+    .indicator-row:nth-child(even) { background: #f9fafb; }
+    .ind-name { font-weight: 700; font-size: 14px; min-width: 180px; color: #111827; }
+    .ind-desc { font-size: 13px; color: #4b5563; line-height: 1.5; }
+
+    /* ── Watchlist ── */
+    .watchlist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-top: 32px;
+    }
+    .watchlist-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .watchlist-card h4 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: #16a34a;
+      margin-bottom: 12px;
+    }
+    .watchlist-card ul { list-style: none; }
+    .watchlist-card li {
+      font-size: 13px;
+      color: #374151;
+      padding: 4px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .watchlist-card li:last-child { border-bottom: none; }
+
+    /* ── About ── */
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 40px;
+      align-items: start;
+    }
+    @media (max-width: 600px) { .about-grid { grid-template-columns: 1fr; } }
+    .avatar {
+      width: 100%;
+      aspect-ratio: 1;
+      max-width: 180px;
+      background: #dcfce7;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 64px;
+    }
+
+    /* ── CTA section ── */
+    .cta-section {
+      background: #111827;
+      color: white;
+      text-align: center;
+      padding: 72px 0;
+    }
+    .cta-section h2 { color: white; }
+    .cta-section .section-sub { color: #9ca3af; }
+
+    /* ── Disclaimer ── */
+    .disclaimer {
+      background: #f9fafb;
+      border-top: 1px solid #e5e7eb;
+      padding: 40px 0;
+    }
+    .disclaimer p {
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.7;
+      max-width: 680px;
+    }
+    .disclaimer strong { color: #6b7280; }
+
+    /* ── Footer ── */
+    footer {
+      background: #111827;
+      color: #6b7280;
+      text-align: center;
+      padding: 24px;
+      font-size: 13px;
+    }
+
+    @media (max-width: 640px) {
+      .signup-card { padding: 24px 20px; }
+      .indicator-row { flex-direction: column; gap: 4px; }
+      .ind-name { min-width: unset; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav>
+  <div class="container">
+    <div class="nav-logo">🟢 <span>Markt-Monitor</span></div>
+    <a href="#signup" class="btn-green" style="width:auto;padding:10px 22px;font-size:14px">Abonnieren</a>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<div class="hero">
+  <div class="container">
+    <div class="badge">Kostenlos · Privat · Keine Werbung</div>
+    <h1>Kaufen, wenn andere<br>aus Panik verkaufen.</h1>
+    <p>
+      Ein tägliches Frühwarnsystem nach den Prinzipien von Warren Buffett und Charlie Munger.
+      Du wirst benachrichtigt, wenn Qualitätsaktien aus makroökonomischen Gründen günstig werden -
+      nicht wegen fundamentaler Probleme.
+    </p>
+
+    <!-- Signup card embedded in hero -->
+    <div class="signup-card" id="signup">
+      <h3>Jetzt kostenlos abonnieren</h3>
+      <p>Schick mir eine kurze E-Mail - ich trage dich dann manuell ein und du bekommst eine Willkommens-Mail mit allen Details.</p>
+      <a href="mailto:stefan.steinberger16@gmail.com?subject=Markt-Monitor%20abonnieren&body=Hallo%20Stefan%2C%0A%0Aich%20m%C3%B6chte%20den%20Markt-Monitor%20Newsletter%20abonnieren.%0A%0AViele%20Gr%C3%BC%C3%9Fe"
+         class="btn-green">
+        ✉️ &nbsp;Jetzt per E-Mail anfragen
+      </a>
+      <p class="signup-note">
+        Kein Spam. Kein Abo-Modell. Du kannst dich jederzeit mit einer kurzen Antwort wieder austragen.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Philosophy ── -->
+<section>
+  <div class="container">
+    <h2>Die Investitionsphilosophie</h2>
+    <p class="section-sub">Buffett und Munger haben dieselbe Grundidee - nur mit leicht unterschiedlichem Blickwinkel.</p>
+
+    <div class="quote-block">
+      "Es ist weitaus besser, ein wunderbares Unternehmen zu einem fairen Preis zu kaufen,
+      als ein faires Unternehmen zu einem wunderbaren Preis."
+      <br><br>
+      <span style="font-style:normal;font-size:14px;opacity:.75">— Warren Buffett</span>
+    </div>
+
+    <p style="font-size:15px;color:#374151;line-height:1.8;margin-bottom:16px">
+      Der Markt ist keine Waage, die täglich den fairen Wert misst - er ist ein nervöser Mitbewohner,
+      der manchmal panisch verkauft. Wenn der VIX hochgeht, wenn eine Bankenkrise ausbricht, wenn der
+      Ölpreis explodiert - dann fallen alle Aktien. Auch die, die absolut nichts damit zu tun haben.
+    </p>
+    <p style="font-size:15px;color:#374151;line-height:1.8">
+      Genau das ist der Moment, auf den dieser Monitor wartet: <strong>wenn das Unternehmen unverändert
+      stark ist, aber der Preis gefallen ist.</strong> Der Unterschied zwischen dem Preis und dem Wert
+      eines Unternehmens ist der Gewinn für den geduldigen Investor.
+    </p>
+  </div>
+</section>
+
+<!-- ── Signals ── -->
+<section>
+  <div class="container">
+    <h2>Drei Signalstufen</h2>
+    <p class="section-sub">Das System sendet keine E-Mail, wenn alles normal läuft. Nur wenn ein Signal ausgelöst wird.</p>
+    <div class="signals">
+      <div class="signal-box signal-normal">
+        <div class="icon">⚪</div>
+        <h4>NORMAL</h4>
+        <p>Alle Indikatoren im Normbereich. Kein Handlungsbedarf - du bekommst keine Mail.</p>
+      </div>
+      <div class="signal-box signal-watch">
+        <div class="icon">🟡</div>
+        <h4>BEOBACHTEN</h4>
+        <p>Ein Indikator nähert sich dem Kaufbereich. Noch nicht handeln, aber im Auge behalten.</p>
+      </div>
+      <div class="signal-box signal-buy">
+        <div class="icon">🟢</div>
+        <h4>KAUFSIGNAL</h4>
+        <p>Kaufschwelle erreicht. Qualitätsaktien werden gerade aus den falschen Gründen günstig.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Indicators ── -->
+<section>
+  <div class="container">
+    <h2>Die 7 Indikatoren</h2>
+    <p class="section-sub">Jeder Indikator ist ein spezifisches Makroereignis, das historisch zu unfairen Abschlägen auf Qualitätsaktien geführt hat.</p>
+
+    <div class="indicators">
+      <div class="indicator-row">
+        <div class="ind-name">VIX - Angst-Index</div>
+        <div class="ind-desc">Bei breiter Marktpanik werden alle liquiden Positionen verkauft - auch Versicherungen und Banken, die nichts mit dem Auslöser zu tun haben. Kaufsignal ab 30.</div>
+      </div>
+      <div class="indicator-row">
+        <div class="ind-name">US-Regionalbanken (KRE)</div>
+        <div class="ind-desc">Ein Kurseinbruch im KRE-ETF signalisiert eine US-Bankenkrise. Konservativ geführte Häuser wie U.S. Bancorp fallen mit dem Sektor - obwohl ihre Fundamentaldaten intakt sind.</div>
+      </div>
+      <div class="indicator-row">
+        <div class="ind-name">Nasdaq 100 (QQQ)</div>
+        <div class="ind-desc">Tech-Korrekturen erzwingen Portfolioverkäufe in allen Sektoren. Versicherungen und Banken fallen mit, obwohl sie null KI- oder Tech-Exposure haben.</div>
+      </div>
+      <div class="indicator-row">
+        <div class="ind-name">NVIDIA (KI-Indikator)</div>
+        <div class="ind-desc">NVIDIA ist der Frühindikator für KI-Sentiment. Ein starker Rückgang signalisiert eine drohende Nasdaq-Korrektur mit breiten Zwangsverkäufen.</div>
+      </div>
+      <div class="indicator-row">
+        <div class="ind-name">Brent-Öl (hoch)</div>
+        <div class="ind-desc">Öl über 120 $ signalisiert Iran-Kriegseskalation. Europäische Aktien fallen aus Rezessionsangst - aber Rückversicherer wie Allianz und Munich Re sind tatsächlich Profiteure steigender Prämien.</div>
+      </div>
+      <div class="indicator-row">
+        <div class="ind-name">US 10-Jahres-Rendite</div>
+        <div class="ind-desc">Steigende Zinsen drücken KGV-Multiples mechanisch nach unten. Gleiche Gewinne, niedrigerer fairer Preis - ein rechnerischer, kein fundamentaler Effekt.</div>
+      </div>
+      <div class="indicator-row">
+        <div class="ind-name">Atlantik-Hurrikan</div>
+        <div class="ind-desc">Nach einem Hurrikan-Landfall fallen Versicherungsaktien 20-35%. Der maximale Kursabschlag ist 2-3 Tage nach dem Aufprall - genau dann, wenn die Prämien für die nächsten 3-5 Jahre steigen.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Watchlist ── -->
+<section>
+  <div class="container">
+    <h2>Die Watchlist</h2>
+    <p class="section-sub">Versicherungen, Banken und Infrastruktur aus drei Märkten - mit nachgewiesenem Franchise und langfristiger Preismacht.</p>
+    <div class="watchlist-grid">
+      <div class="watchlist-card">
+        <h4>S&amp;P 500</h4>
+        <ul>
+          <li>Chubb</li>
+          <li>Cincinnati Financial</li>
+          <li>Travelers</li>
+          <li>Progressive</li>
+          <li>Arch Capital</li>
+          <li>U.S. Bancorp</li>
+          <li>M&amp;T Bank</li>
+          <li>Wells Fargo</li>
+        </ul>
+      </div>
+      <div class="watchlist-card">
+        <h4>DAX</h4>
+        <ul>
+          <li>Allianz SE</li>
+          <li>Munich Re</li>
+          <li>Hannover Rück</li>
+          <li>Deutsche Börse</li>
+          <li>DHL Group</li>
+        </ul>
+      </div>
+      <div class="watchlist-card">
+        <h4>ATX</h4>
+        <ul>
+          <li>Erste Group</li>
+          <li>Vienna Insurance Group</li>
+          <li>Andritz AG</li>
+          <li>EVN AG</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── About ── -->
+<section>
+  <div class="container">
+    <div class="about-grid">
+      <div>
+        <div class="avatar">👤</div>
+      </div>
+      <div>
+        <h2>Wer steckt dahinter?</h2>
+        <p style="font-size:15px;color:#374151;line-height:1.8;margin-top:12px">
+          Ich bin Stefan - ich investiere seit Jahren nach den Prinzipien von Buffett und Munger,
+          mit Fokus auf europäische und amerikanische Qualitätsunternehmen.
+        </p>
+        <p style="font-size:15px;color:#374151;line-height:1.8;margin-top:12px">
+          Dieser Newsletter ist mein privates Frühwarnsystem, das ich mit Freunden und
+          Gleichgesinnten teile. Es kostet nichts, keine Werbung, kein Verkauf von Produkten.
+          Ich will einfach nicht alleine auf diese Signale schauen.
+        </p>
+        <p style="font-size:15px;color:#374151;line-height:1.8;margin-top:12px">
+          Wenn du ähnlich denkst - langfristig, diszipliniert, wertorientiert - dann bist du
+          willkommen.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<div class="cta-section">
+  <div class="container">
+    <h2 style="margin-bottom:12px">Bereit, informiert zu bleiben?</h2>
+    <p class="section-sub" style="margin:0 auto 32px">
+      Kostenlos, unverbindlich, jederzeit abmeldbar.
+    </p>
+    <a href="mailto:stefan.steinberger16@gmail.com?subject=Markt-Monitor%20abonnieren&body=Hallo%20Stefan%2C%0A%0Aich%20m%C3%B6chte%20den%20Markt-Monitor%20Newsletter%20abonnieren.%0A%0AViele%20Gr%C3%BC%C3%9Fe"
+       class="btn-green" style="display:inline-block;width:auto;padding:14px 36px;font-size:16px">
+      ✉️ &nbsp;Jetzt abonnieren
+    </a>
+  </div>
+</div>
+
+<!-- ── Disclaimer ── -->
+<div class="disclaimer">
+  <div class="container">
+    <p>
+      <strong>Rechtlicher Hinweis:</strong> Dieser Newsletter ist eine private, unentgeltliche
+      Marktbeobachtung und stellt ausdrücklich <strong>keine Anlageberatung, Vermögensverwaltung
+      oder Anlageempfehlung</strong> im Sinne des Wertpapieraufsichtsgesetzes 2018 (WAG 2018) oder
+      der EU-Richtlinie MiFID II dar. Der Betreiber ist kein konzessionierter Anlageberater oder
+      Wertpapierdienstleister. Alle Inhalte dienen ausschließlich der allgemeinen Information.
+      Sie ersetzen keine individuelle, professionelle Finanzberatung.
+      <strong>Kapitalanlagen sind mit Risiken verbunden, einschließlich des vollständigen
+      Kapitalverlusts.</strong> Vergangene Wertentwicklungen sind kein verlässlicher Indikator
+      für künftige Ergebnisse. Für die Richtigkeit und Vollständigkeit der Informationen wird
+      keine Haftung übernommen. Jede Investitionsentscheidung liegt in der alleinigen
+      Verantwortung des Lesers.
+    </p>
+  </div>
+</div>
+
+<!-- ── Footer ── -->
+<footer>
+  Markt-Monitor &nbsp;·&nbsp; Privater Newsletter &nbsp;·&nbsp;
+  <a href="mailto:stefan.steinberger16@gmail.com" style="color:#6b7280">stefan.steinberger16@gmail.com</a>
+</footer>
+
+</body>
+</html>

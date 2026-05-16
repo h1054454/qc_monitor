@@ -1,0 +1,46 @@
+{
+  "_setup_instructions": {
+    "email_step_1": "Generate a Gmail App Password: myaccount.google.com → Security → 2-Step Verification → App Passwords → create new (Mail + Windows Computer). Copy the 16-char password.",
+    "email_step_2": "Paste it into email.app_password below.",
+    "telegram_step_1": "Message @BotFather on Telegram → /newbot → follow prompts → copy the bot token.",
+    "telegram_step_2": "Start a chat with your new bot (send it any message).",
+    "telegram_step_3": "Get your chat_id: open https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates in a browser → find the 'id' field under 'chat'.",
+    "telegram_step_4": "Paste both into telegram.bot_token and telegram.chat_id below.",
+    "run_step": "Copy this file to monitor_config.json, fill in your credentials, then run: python scripts/market_monitor.py",
+    "schedule_step": "Schedule via Windows Task Scheduler using the PowerShell commands at the bottom of scripts/market_monitor.py."
+  },
+
+  "telegram": {
+    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN_HERE",
+    "chat_id":   "YOUR_TELEGRAM_CHAT_ID_HERE"
+  },
+
+  "email": {
+    "sender":       "your.email@gmail.com",
+    "recipient":    "your.email@gmail.com",
+    "bcc":          [],
+    "app_password": "YOUR_GMAIL_APP_PASSWORD_HERE",
+    "smtp_host":    "smtp.gmail.com",
+    "smtp_port":    465
+  },
+
+  "_thresholds_note": "Adjust thresholds to your preferred sensitivity. Defaults match a Buffett/Munger Austrian investor perspective.",
+  "thresholds": {
+    "vix_amber":              20,
+    "vix_red":                30,
+    "kre_drop_amber_pct":    -10,
+    "kre_drop_red_pct":      -15,
+    "qqq_drop_amber_pct":    -10,
+    "qqq_drop_red_pct":      -20,
+    "nvda_drop_amber_pct":   -20,
+    "nvda_drop_red_pct":     -35,
+    "brent_high_amber":       120,
+    "brent_high_red":         130,
+    "brent_low_amber":         80,
+    "brent_low_red":           70,
+    "us10y_amber":              4.5,
+    "us10y_red":                5.5,
+    "hurricane_amber_mph":     74,
+    "hurricane_red_mph":      111
+  }
+}
