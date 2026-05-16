@@ -239,10 +239,12 @@ INDICATORS = {
         "red": 5.5,
         "scenario": "US-Haushaltsstress -steigender risikofreier Zins drückt alle KGV-Multiples",
         "why_discount": (
-            "Jede Aktie wird relativ zum risikofreien Zins bewertet. Eine 10J-Rendite von 5,5%+ "
-            "bedeutet: Eine Aktie, die bei KGV 15 fair war, ist nun nur bei KGV 10 fair -"
-            "gleiche Gewinne, niedrigerer Preis. Qualitätsunternehmen werden aus einem rein "
-            "mechanischen, nicht fundamentalen Grund günstig."
+            "Wenn US-Anleihen 4,5 % oder mehr abwerfen, verkaufen viele Investoren Aktien — "
+            "nicht weil die Unternehmen schlechter werden, sondern weil Anleihen als sichere "
+            "Alternative plötzlich attraktiv sind. Das trifft alle Aktien pauschal, auch "
+            "Versicherungen und Banken, die mit dem Zinsanstieg operativ wenig zu tun haben. "
+            "Dieselben Gewinne, günstigerer Preis — wegen eines externen Recheneffekts, "
+            "nicht wegen eines fundamentalen Problems."
         ),
         "news_url": "https://news.google.com/search?q=US+Staatsanleihen+Rendite+Zinsanstieg&hl=de&gl=AT",
         "stocks": ["CINF", "CB", "TRV", "PGR", "USB", "MTB", "WFC", "ALV", "MUV2", "HNR1", "VIG", "EBS"],
@@ -1063,7 +1065,8 @@ def build_html(alerts, closes, watchlist):
   <div style="padding:24px 20px 0;border-top:1px solid #e5e7eb;margin:24px 20px 0;
               font-size:12px;color:#9ca3af;line-height:1.9">
     Markt-Monitor &nbsp;·&nbsp; stefan.steinberger16@gmail.com<br>
-    Zum Abmelden einfach auf diese E-Mail antworten.
+    <a href="mailto:stefan.steinberger16@gmail.com?subject=ABMELDEN"
+       style="color:#9ca3af;text-decoration:underline">Vom Newsletter abmelden</a>
   </div>
 
 </div>
@@ -1628,6 +1631,57 @@ def check_new_subscribers_via_imap(cfg):
         return []
 
 
+def check_unsubscribe_requests_via_imap(cfg):
+    """
+    Poll Gmail for emails with subject 'ABMELDEN' sent by current BCC subscribers.
+    Removes matching addresses from BCC. Returns list of removed addresses.
+    """
+    email_cfg    = cfg["email"]
+    sender_email = email_cfg["sender"].lower()
+    bcc_lower    = {b.lower(): b for b in email_cfg.get("bcc", [])}
+
+    if not bcc_lower:
+        return []
+
+    try:
+        mail = imaplib.IMAP4_SSL("imap.gmail.com")
+        mail.login(email_cfg["sender"], email_cfg["app_password"])
+        mail.select("INBOX")
+
+        _, ids = mail.search(None, '(UNSEEN SUBJECT "ABMELDEN")')
+        if not ids[0]:
+            mail.close()
+            mail.logout()
+            return []
+
+        removed = []
+        for msg_id in ids[0].split():
+            _, data = mail.fetch(msg_id, "(RFC822)")
+            msg = stdlib_email.message_from_bytes(data[0][1])
+
+            from_raw  = msg.get("From", "")
+            found     = re.findall(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", from_raw)
+            requester = next((e.lower() for e in found if e.lower() != sender_email), None)
+
+            if requester and requester in bcc_lower:
+                original = bcc_lower[requester]
+                cfg["email"]["bcc"] = [b for b in cfg["email"]["bcc"]
+                                       if b.lower() != requester]
+                removed.append(original)
+                log.info(f"Unsubscribed: {original}")
+                print(f"[{datetime.now():%Y-%m-%d %H:%M}] Unsubscribed: {original}")
+
+            mail.store(msg_id, "+FLAGS", "\\Seen")
+
+        mail.close()
+        mail.logout()
+        return removed
+
+    except Exception as exc:
+        log.warning(f"IMAP unsubscribe check skipped: {exc}")
+        return []
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -1652,6 +1706,12 @@ def main():
     if new_from_form:
         save_cfg(cfg)
         log.info(f"Added {len(new_from_form)} new subscriber(s) from web form")
+
+    # Process unsubscribe requests (subject: ABMELDEN)
+    removed = check_unsubscribe_requests_via_imap(cfg)
+    if removed:
+        save_cfg(cfg)
+        log.info(f"Removed {len(removed)} subscriber(s): {removed}")
 
     # Welcome any new BCC subscribers before the regular run
     check_and_welcome_new_subscribers(cfg)
