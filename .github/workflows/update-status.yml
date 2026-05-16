@@ -30,6 +30,6 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f website/status.html
+          git add -f docs/status.html
           git diff --cached --quiet || git commit -m "chore: update status.html [skip ci]"
           git push

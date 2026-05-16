@@ -29,7 +29,7 @@ CFG_PATH         = BASE_DIR / "config" / "monitor_config.json"
 LOG_PATH         = BASE_DIR / "logs"   / "monitor_log.txt"
 CSV_PATH         = BASE_DIR / "data"   / "indicator_history.csv"
 SUBSCRIBERS_PATH = BASE_DIR / "config" / "known_subscribers.json"
-STATUS_PATH      = BASE_DIR / "website" / "status.html"
+STATUS_PATH      = BASE_DIR / "docs"    / "status.html"
 
 CSV_COLUMNS = [
     "date",

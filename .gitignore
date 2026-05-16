@@ -4,7 +4,7 @@ config/known_subscribers.json
 
 # ── Generated / runtime ───────────────────────────────────────────────────────
 logs/
-website/status.html
+docs/status.html
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
