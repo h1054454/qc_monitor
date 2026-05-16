@@ -1,128 +1,93 @@
-# QC Monitor — Macro Early Warning System for Value Investors
+# QC Monitor
 
-A daily macro indicator monitor and weekly stock screener built on the investment principles of **Warren Buffett and Charlie Munger**. Monitors ATX, DAX, and S&P 500 quality stocks and sends alerts when macro events create unfair discounts unrelated to business fundamentals.
+**You get an email and a Telegram message when quality stocks become cheap for the wrong reasons.**
 
-## What This Tool Does
-
-### Daily Monitor (`scripts/market_monitor.py`)
-Runs every morning. Checks 7 macro indicators against Buffett/Munger buy-signal thresholds. Sends alerts via **Email (HTML)** and **Telegram** when a threshold is crossed. Also regenerates `website/status.html` with the current market snapshot.
-
-**Signal logic (inverted from conventional danger colors):**
-- ⚪ **NORMAL** — all indicators in range, no email sent
-- 🟡 **BEOBACHTEN** — approaching buy threshold, watch closely
-- 🟢 **KAUFSIGNAL** — buy threshold reached: quality stocks are getting cheap for the wrong reasons
-
-### Weekly Screener (`scripts/weekly_screener.py`)
-Runs every Monday. Fetches live P/E ratios and 52-week drawdowns for a curated 24-stock watchlist. Flags stocks where **both** Buffett (P/E below threshold) and Munger (≥10% off 52-week high) would agree to buy. Logs results to CSV for time-series analysis.
-
-### Newsletter Website (`website/index.html` + `website/status.html`)
-- `index.html` — static landing page explaining the philosophy, indicators, and watchlist. Signup via mailto.
-- `status.html` — regenerated daily with live indicator values, current signal levels, and grouped stock recommendations.
+Macro events — a banking panic, a tech selloff, an oil price spike — cause institutional investors to dump everything liquid, including high-quality insurance and banking companies that have nothing to do with the triggering event. This tool watches for those moments and tells you which specific stocks are affected.
 
 ---
 
-## The 7 Macro Indicators
+## What you receive
 
-| Indicator | Trigger | Why it creates unfair discounts |
-|-----------|---------|--------------------------------|
-| **VIX** | > 20 / > 30 | Broad panic causes indiscriminate selling of quality insurance + banking stocks |
-| **KRE (US Regional Banks ETF)** | -10% / -15% in 14 days | Regional bank crisis drags conservative banks (USB, MTB) down with the sector |
-| **QQQ (Nasdaq 100)** | -10% / -20% from 52W high | Tech correction forces portfolio liquidations across all sectors |
-| **NVDA** | -20% / -35% from 52W high | AI sentiment collapse signals Nasdaq correction with broad forced selling |
-| **Brent Oil (high)** | > $120 / > $130 | Iran war escalation sells down European stocks — but reinsurers are actually beneficiaries |
-| **Brent Oil (low)** | < $80 / < $70 | Iran de-escalation reduces reinsurer pricing tailwind |
-| **US 10Y Treasury Yield** | > 4.5% / > 5.5% | Rising risk-free rate mechanically compresses P/E multiples across all equities |
-| **Atlantic Hurricane** | Cat 1+ / Cat 3+ | Hurricane landfall creates 2-3 day window of maximum fear discount on insurers |
-
----
-
-## Watchlist
-
-**S&P 500:** Chubb, Cincinnati Financial, Travelers, Progressive, Arch Capital, U.S. Bancorp, M&T Bank, Wells Fargo, Bank of America
-
-**DAX:** Allianz SE, Munich Re, Hannover Rück, Deutsche Börse, DHL Group, RWE AG
-
-**ATX:** Erste Group, Vienna Insurance Group, OMV AG, Raiffeisen Bank, Andritz AG, EVN AG
-
----
-
-## Folder Structure
+A daily morning message (email + Telegram) that looks like this:
 
 ```
-QC_Monitor/
-  scripts/
-    market_monitor.py       # Daily macro monitor — email + Telegram + status.html
-    weekly_screener.py      # Weekly Buffett/Munger consensus screener
-    fill_dax.py             # One-time helper for DAX data enrichment
-  config/
-    monitor_config.json     # GITIGNORED — credentials (Gmail, Telegram, thresholds)
-    monitor_config.example.json  # Template — copy to monitor_config.json and fill in
-    known_subscribers.json  # GITIGNORED — list of addresses that received welcome email
-  data/
-    indicator_history.csv   # Time-series of all daily indicator readings
-    screener_history.csv    # Time-series of weekly screener results (auto-created)
-  logs/
-    monitor_log.txt         # GITIGNORED — runtime log
-    screener_log.txt        # GITIGNORED — runtime log
-  website/
-    index.html              # Static landing page + newsletter signup
-    status.html             # GITIGNORED — auto-generated daily market snapshot
+🟢 KAUFSIGNAL - Markt-Monitor
+16.05.2026, 08:00
+
+🟡 US 10-Jahres-Staatsanleihe (Rendite)
+   4,60% - Gelb ab 4,5%, Rot ab 5,5%
+   US-Haushaltsstress — KGV-Multiples werden mechanisch gedrückt
+
+   Günstig im S&P 500: Cincinnati Financial, Chubb, Travelers, ...
+   Günstig im DAX: Allianz SE, Munich Re, Hannover Rück
+   Günstig im ATX: Erste Group, Vienna Insurance Group
+
+   → Aktuelle Nachrichten
+
+⚪ VIX Angst-Index: 18,50 - Gelb ab 20, Rot ab 30
+⚪ Nasdaq 100: -1,5% vom 52W-Hoch - Gelb ab -10%, Rot ab -20%
+...
+
+⚪ NORMAL = Kein Signal  🟡 BEOBACHTEN = Im Auge behalten  🟢 KAUFSIGNAL = Jetzt handeln
 ```
+
+When everything is normal, you hear nothing. The tool is silent until something matters.
+
+---
+
+## The seven scenarios it watches
+
+Each scenario has a documented history of creating unfair discounts on specific quality stocks:
+
+| Signal | What happened | Why it creates a buying window |
+|--------|--------------|-------------------------------|
+| **VIX > 30** | Broad market panic | Institutions sell everything liquid. Insurance and banking stocks fall even if they have nothing to do with the panic. |
+| **US Regional Banks -15% in 14 days** | Banking sector crisis | Conservatively-managed banks like U.S. Bancorp fall with the sector despite sound balance sheets. |
+| **Nasdaq -20% from high** | Tech correction | Portfolio margin calls force selling across all sectors. Insurers have zero AI exposure but fall with NVIDIA. |
+| **NVIDIA -35% from high** | AI sentiment collapse | Early warning of a Nasdaq correction. Broad forced selling typically follows. |
+| **Brent > $130** | Iran war escalation | European equities sell off on recession fears. But Allianz and Munich Re are *reinsurers* — catastrophe events raise their pricing power for years. |
+| **US 10Y yield > 5.5%** | Treasury market stress | Rising risk-free rates compress P/E multiples mechanically. Same earnings, lower price — a math effect, not a business deterioration. |
+| **Category 3+ Hurricane** | Atlantic storm landfall | Maximum fear discount on insurers hits 2-3 days after landfall — exactly when the next 5 years of premium increases are becoming certain. |
+
+---
+
+## The stocks it watches
+
+Selected for demonstrated franchise value, disciplined management, and long-term pricing power:
+
+**S&P 500** — Chubb, Cincinnati Financial, Travelers, Progressive, Arch Capital, U.S. Bancorp, M&T Bank, Wells Fargo
+
+**DAX** — Allianz SE, Munich Re, Hannover Rück, Deutsche Börse, DHL Group
+
+**ATX** — Erste Group, Vienna Insurance Group, Andritz AG, EVN AG
+
+---
+
+## Weekly screener
+
+Every Monday morning, a second report shows where **both** Buffett (P/E below buy threshold) and Munger (price 10%+ off its 52-week high) would agree to act. When both signals align, the business quality is right *and* the price discipline is right.
+
+---
+
+## The website
+
+A public landing page explains the philosophy and lets people subscribe. A live status page is regenerated each morning alongside the email — it shows the current reading of every indicator, color-coded, with a timestamp.
 
 ---
 
 ## Setup
 
-### 1. Install dependencies
 ```bash
 pip install yfinance requests
-```
-
-### 2. Configure credentials
-```bash
 cp config/monitor_config.example.json config/monitor_config.json
-# Edit monitor_config.json — add Gmail App Password and Telegram bot credentials
+# Add Gmail App Password + Telegram bot credentials to monitor_config.json
+python scripts/market_monitor.py
 ```
 
-**Gmail App Password:** myaccount.google.com → Security → 2-Step Verification → App Passwords
-
-**Telegram Bot:**
-1. Message `@BotFather` → `/newbot` → copy token
-2. Send your bot any message
-3. Get your `chat_id`: `https://api.telegram.org/bot<TOKEN>/getUpdates`
-
-### 3. Run manually
-```bash
-python scripts/market_monitor.py   # daily monitor
-python scripts/weekly_screener.py  # weekly screener
-```
-
-### 4. Schedule (Windows Task Scheduler)
-See the PowerShell commands at the bottom of each script file.
-
-### 5. Newsletter distribution
-Add subscriber email addresses to the `bcc` array in `monitor_config.json`.
-New addresses automatically receive a personalized welcome email on the next run.
+Full setup instructions are in `config/monitor_config.example.json`. Windows Task Scheduler commands are at the bottom of each script.
 
 ---
 
-## Newsletter Welcome Email
-Automatically sent once to each new subscriber added to the `bcc` list.
-Contains: investment philosophy, all 7 indicators explained, watchlist, signal legend, legal disclaimer.
+## Disclaimer
 
----
-
-## Legal
-Private, non-commercial market observation. Not investment advice. Not a licensed financial advisor. See full disclaimer in `website/index.html`.
-
----
-
-## Tech Stack
-- Python 3.x
-- `yfinance` — market data (prices, P/E, P/B, dividend yield)
-- `requests` — NOAA hurricane feed, Telegram Bot API
-- Gmail SMTP SSL (port 465) — HTML email delivery
-- Static HTML — no backend, no framework, deployable to GitHub Pages
-
-## Keywords
-`value-investing` `buffett` `munger` `market-monitor` `stock-screener` `macro-indicators` `vix` `early-warning` `atx` `dax` `sp500` `telegram-bot` `gmail` `newsletter` `python`
+Private, non-commercial market observation. Not investment advice. Not a licensed financial advisor (WAG 2018 / MiFID II). All investment decisions are your own responsibility.
