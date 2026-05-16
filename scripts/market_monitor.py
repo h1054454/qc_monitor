@@ -9,8 +9,11 @@ Setup (one time):
   3. Schedule via Windows Task Scheduler (see instructions at bottom of this file)
 """
 
+import email as stdlib_email
+import imaplib
 import json
 import logging
+import re
 import smtplib
 import ssl
 from datetime import datetime, date
@@ -1101,6 +1104,69 @@ def generate_status_html(all_statuses, raw):
     print(f"[{datetime.now():%Y-%m-%d %H:%M}] status.html updated")
 
 
+# ── Auto-subscriber ingestion via IMAP ───────────────────────────────────────
+
+def save_cfg(cfg):
+    """Write updated config back to disk (persists new BCC entries)."""
+    with open(CFG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+
+def check_new_subscribers_via_imap(cfg):
+    """
+    Poll Gmail for Formspree signup notifications, add new addresses to BCC.
+    Looks for unread emails with subject containing 'Markt-Monitor Anmeldung'.
+    Returns list of newly added email addresses.
+    """
+    email_cfg = cfg["email"]
+    excluded = {email_cfg["sender"].lower(), "noreply@formspree.io"}
+
+    try:
+        mail = imaplib.IMAP4_SSL("imap.gmail.com")
+        mail.login(email_cfg["sender"], email_cfg["app_password"])
+        mail.select("INBOX")
+
+        _, ids = mail.search(None, '(UNSEEN SUBJECT "Markt-Monitor Anmeldung")')
+        if not ids[0]:
+            mail.close()
+            mail.logout()
+            return []
+
+        new_emails = []
+        for msg_id in ids[0].split():
+            _, data = mail.fetch(msg_id, "(RFC822)")
+            msg = stdlib_email.message_from_bytes(data[0][1])
+
+            # Extract plain-text body
+            body = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        body = part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                        break
+            else:
+                body = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
+
+            # Find subscriber email — any address in body that isn't ours or Formspree's
+            found = re.findall(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", body)
+            subscriber = next((e.lower() for e in found if e.lower() not in excluded), None)
+
+            if subscriber and subscriber not in [b.lower() for b in cfg["email"]["bcc"]]:
+                cfg["email"]["bcc"].append(subscriber)
+                new_emails.append(subscriber)
+                log.info(f"New subscriber from form: {subscriber}")
+
+            mail.store(msg_id, "+FLAGS", "\\Seen")
+
+        mail.close()
+        mail.logout()
+        return new_emails
+
+    except Exception as exc:
+        log.warning(f"IMAP subscriber check skipped: {exc}")
+        return []
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -1119,6 +1185,12 @@ def main():
         print("Please add your Gmail App Password to monitor_config.json")
         log.error("Gmail App Password not configured")
         return
+
+    # Pull new subscribers from Formspree notification emails in Gmail
+    new_from_form = check_new_subscribers_via_imap(cfg)
+    if new_from_form:
+        save_cfg(cfg)
+        log.info(f"Added {len(new_from_form)} new subscriber(s) from web form")
 
     # Welcome any new BCC subscribers before the regular run
     check_and_welcome_new_subscribers(cfg)

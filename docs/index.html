@@ -302,11 +302,12 @@
     <!-- Signup card embedded in hero -->
     <div class="signup-card" id="signup">
       <h3>Jetzt kostenlos abonnieren</h3>
-      <p>Schick mir eine kurze E-Mail - ich trage dich dann manuell ein und du bekommst eine Willkommens-Mail mit allen Details.</p>
-      <a href="mailto:stefan.steinberger16@gmail.com?subject=Markt-Monitor%20abonnieren&body=Hallo%20Stefan%2C%0A%0Aich%20m%C3%B6chte%20den%20Markt-Monitor%20Newsletter%20abonnieren.%0A%0AViele%20Gr%C3%BC%C3%9Fe"
-         class="btn-green">
-        ✉️ &nbsp;Jetzt per E-Mail anfragen
-      </a>
+      <p id="signup-msg">E-Mail eintragen - du bekommst automatisch eine Willkommens-Mail mit allen Details.</p>
+      <form action="https://formspree.io/f/YOUR_FORM_ID" method="POST" onsubmit="handleSignup(event)">
+        <input type="hidden" name="_subject" value="Markt-Monitor Anmeldung">
+        <input type="email" name="email" required placeholder="deine@email.at" autocomplete="email">
+        <button type="submit" class="btn-green">Jetzt abonnieren</button>
+      </form>
       <p class="signup-note">
         Kein Spam. Kein Abo-Modell. Du kannst dich jederzeit mit einer kurzen Antwort wieder austragen.
       </p>
@@ -480,9 +481,8 @@
     <p class="section-sub" style="margin:0 auto 32px">
       Kostenlos, unverbindlich, jederzeit abmeldbar.
     </p>
-    <a href="mailto:stefan.steinberger16@gmail.com?subject=Markt-Monitor%20abonnieren&body=Hallo%20Stefan%2C%0A%0Aich%20m%C3%B6chte%20den%20Markt-Monitor%20Newsletter%20abonnieren.%0A%0AViele%20Gr%C3%BC%C3%9Fe"
-       class="btn-green" style="display:inline-block;width:auto;padding:14px 36px;font-size:16px">
-      ✉️ &nbsp;Jetzt abonnieren
+    <a href="#signup" class="btn-green" style="display:inline-block;width:auto;padding:14px 36px;font-size:16px">
+      Jetzt abonnieren
     </a>
   </div>
 </div>
@@ -512,5 +512,29 @@
   <a href="mailto:stefan.steinberger16@gmail.com" style="color:#6b7280">stefan.steinberger16@gmail.com</a>
 </footer>
 
+<script>
+  function handleSignup(e) {
+    e.preventDefault();
+    var form = e.target;
+    var data = new FormData(form);
+    fetch(form.action, {
+      method: "POST",
+      body: data,
+      headers: { "Accept": "application/json" }
+    }).then(function(r) {
+      if (r.ok) {
+        document.getElementById("signup-msg").textContent =
+          "Danke! Du bekommst in Kurze eine Willkommens-Mail.";
+        form.style.display = "none";
+      } else {
+        document.getElementById("signup-msg").textContent =
+          "Etwas hat nicht geklappt. Bitte versuche es nochmal.";
+      }
+    }).catch(function() {
+      document.getElementById("signup-msg").textContent =
+        "Etwas hat nicht geklappt. Bitte versuche es nochmal.";
+    });
+  }
+</script>
 </body>
 </html>
