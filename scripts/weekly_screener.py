@@ -620,15 +620,16 @@ if __name__ == "__main__":
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# WINDOWS TASK SCHEDULER SETUP — run once in PowerShell as Administrator
+# OPTIONAL LOCAL SCHEDULING (Windows Task Scheduler) — run once in PowerShell as Admin
+# Production runs in the cloud via .github/workflows/weekly-screener.yml (Mondays).
 # ══════════════════════════════════════════════════════════════════════════════
 #
 # Replace <YOUR_PYTHON_PATH> with:  (Get-Command python).Source
 #
 #   $action  = New-ScheduledTaskAction `
 #                  -Execute "<YOUR_PYTHON_PATH>" `
-#                  -Argument "C:\Users\User\Projects\business-mentors\PERSONAS\warren-buffett\stocks-analysis\scripts\weekly_screener.py" `
-#                  -WorkingDirectory "C:\Users\User\Projects\business-mentors\PERSONAS\warren-buffett\stocks-analysis\scripts"
+#                  -Argument "C:\Users\User\Projects\business-mentors\TOOLS\QC_Monitor\scripts\weekly_screener.py" `
+#                  -WorkingDirectory "C:\Users\User\Projects\business-mentors\TOOLS\QC_Monitor"
 #
 #   $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At "08:00AM"
 #
