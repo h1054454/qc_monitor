@@ -216,6 +216,30 @@ HURRICANE_MONTHS = {6, 7, 8, 9, 10, 11}
 NOAA_ACTIVE_STORMS_URL = "https://www.nhc.noaa.gov/activestorms.xml"
 
 
+# ── Aggregate buy-signal logic (calibrated on the 7-year backtest) ────────────
+# A KAUFSIGNAL means broad, indiscriminate selling — the moment quality stocks
+# get dumped for the wrong reasons. The backtest showed a single red indicator is
+# noise (and loses to the index); requiring >=3 panic indicators red at once lifted
+# 12-month returns from +15% to +30%. brent_low (oil-deescalation) never counts
+# toward a buy; an active major hurricane is a standalone buy signal by design.
+BROAD_PANIC_KEYS    = {"VIX", "KRE", "QQQ", "NVDA", "BRENT_HIGH", "US10Y"}
+KAUFSIGNAL_MIN_REDS = 3
+
+
+def signal_level(alerts):
+    """Overall signal from the per-indicator alerts:
+      'red'   (KAUFSIGNAL) -> >=3 broad-panic indicators red, or an active hurricane
+      'amber' (BEOBACHTEN) -> anything else non-green
+      'green' (NORMAL)     -> nothing elevated
+    """
+    broad_reds = sum(1 for a in alerts
+                     if a["level"] == "red" and a.get("key") in BROAD_PANIC_KEYS)
+    hurricane_red = any(a["level"] == "red" and a.get("key") == "HURRICANE" for a in alerts)
+    if broad_reds >= KAUFSIGNAL_MIN_REDS or hurricane_red:
+        return "red"
+    return "amber" if alerts else "green"
+
+
 # ── Data fetching ─────────────────────────────────────────────────────────────
 
 def fetch_price_data():
@@ -563,7 +587,9 @@ def evaluate(closes):
             "stocks": ind["stocks"],
         }
         all_statuses.append(status)
-        if level != "green":
+        # brent_low (oil-deescalation) is informational only — it stays on the
+        # status page but never drives a notification (excluded from alerts).
+        if level != "green" and key != "BRENT_LOW":
             alerts.append(status)
         log.info(f"{key}: {display_current} → {level.upper()}")
 
@@ -611,13 +637,26 @@ def evaluate(closes):
         raw["hurricane_max_winds"] = 0
         raw["hurricane_level"]     = "green"
 
-    all_levels = [a["level"] for a in alerts]
-    raw["overall_level"] = "red" if "red" in all_levels else ("amber" if "amber" in all_levels else "green")
+    raw["overall_level"] = signal_level(alerts)
 
     return alerts, all_statuses, raw
 
 
 # ── CSV logger ────────────────────────────────────────────────────────────────
+
+def read_last_overall_level():
+    """Overall_level of the most recent CSV row — the last run's signal state.
+    Used for edge-triggering (notify only when the signal level changes)."""
+    import csv
+    if not CSV_PATH.exists():
+        return None
+    try:
+        with open(CSV_PATH, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        return rows[-1]["overall_level"] if rows else None
+    except Exception:
+        return None
+
 
 def write_to_csv(raw, alert_sent: bool):
     """Append one row to indicator_history.csv. Creates file with header if new."""
@@ -796,7 +835,7 @@ def buy_target_rows(stock_tickers):
 def build_html(alerts, closes, watchlist):
     today        = _de_date()
     time_str     = datetime.now().strftime("%H:%M")
-    worst        = "red" if any(a["level"] == "red" for a in alerts) else "amber"
+    worst        = signal_level(alerts)
     header_color = LEVEL_COLOR[worst]
     header_label = LEVEL_LABEL[worst]
 
@@ -1037,7 +1076,7 @@ def build_html(alerts, closes, watchlist):
 
 
 def build_subject(alerts):
-    worst = "KAUFSIGNAL" if any(a["level"] == "red" for a in alerts) else "BEOBACHTEN"
+    worst = "KAUFSIGNAL" if signal_level(alerts) == "red" else "BEOBACHTEN"
     labels = [a["label"].split("(")[0].strip() for a in alerts]
     summary = ", ".join(labels[:2]) + (" + mehr" if len(labels) > 2 else "")
     return f"[Markt-Monitor] {worst} - {summary}"
@@ -1049,11 +1088,7 @@ def build_telegram_message(alerts, all_statuses):
     """Compact phone-friendly alert -Telegram supports only basic HTML tags."""
     import html as html_lib
 
-    worst_level = (
-        "red"   if any(a["level"] == "red"   for a in alerts) else
-        "amber" if alerts else
-        "green"
-    )
+    worst_level = signal_level(alerts)
     header_icon = {
         "red":   "🟢 KAUFSIGNAL",
         "amber": "🟡 BEOBACHTEN",
@@ -1762,9 +1797,14 @@ def main():
 
     alerts, all_statuses, raw = evaluate(closes)
 
-    # Always write to CSV -every run, green or not
+    # Edge-triggered: notify only when the signal level CHANGES vs the last run
+    # (the previous state is read from the CSV). This stops the daily repeat-pings
+    # when nothing has changed — silence means "no change", which is the design.
+    current_signal = raw["overall_level"]
+    last_signal    = read_last_overall_level()
+
     alert_sent = False
-    if alerts:
+    if alerts and current_signal != last_signal:
         subject = build_subject(alerts)
         html    = build_html(alerts, closes, watchlist)
         tg_msg  = build_telegram_message(alerts, all_statuses)
@@ -1789,6 +1829,9 @@ def main():
         except Exception as exc:
             log.warning(f"Telegram failed: {exc}")
             print(f"Telegram error (non-fatal): {exc}")
+    elif alerts:
+        log.info(f"Signal unchanged ({current_signal}) since last run -no notification (edge-triggered)")
+        print(f"[{datetime.now():%Y-%m-%d %H:%M}] Signal unchanged ({current_signal}). No notification.")
     else:
         log.info("All indicators green -no alerts sent")
         print(f"[{datetime.now():%Y-%m-%d %H:%M}] All green. No alerts.")
