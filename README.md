@@ -4,6 +4,9 @@
 
 Macro events — a banking panic, a tech selloff, an oil price spike — cause institutional investors to dump everything liquid, including high-quality insurance and banking companies that have nothing to do with the triggering event. This tool watches for those moments and tells you which specific stocks are affected.
 
+> **🇩🇪 Bedienungsanleitung auf Deutsch → [ANLEITUNG.md](ANLEITUNG.md)** — wie du das Tool benutzt und was du beachten musst.
+> The signal is calibrated on a 7-year backtest — see [backtest/report.md](backtest/report.md).
+
 ---
 
 ## What you receive
