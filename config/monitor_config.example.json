@@ -7,7 +7,7 @@
     "telegram_step_3": "Get your chat_id: open https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates in a browser → find the 'id' field under 'chat'.",
     "telegram_step_4": "Paste both into telegram.bot_token and telegram.chat_id below.",
     "run_step": "Copy this file to monitor_config.json, fill in your credentials, then run: python scripts/market_monitor.py",
-    "schedule_step": "Schedule via Windows Task Scheduler using the PowerShell commands at the bottom of scripts/market_monitor.py."
+    "schedule_step": "Production runs in the cloud via GitHub Actions (.github/workflows/market-monitor.yml weekdays + weekly-screener.yml Mondays) — store these values as the MONITOR_CONFIG repo secret. For local use, Windows Task Scheduler commands are at the bottom of each script."
   },
 
   "telegram": {

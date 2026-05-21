@@ -1,0 +1,44 @@
+name: Weekly screener - Monday
+
+# Buffett (P/E below buy threshold) + Munger (10%+ off the 52-week high) screen.
+# Emails the names where BOTH agree to act. Runs in the cloud, like the monitor.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"      # Mondays 06:00 UTC (~08:00 Vienna summer / 07:00 winter)
+  workflow_dispatch:         # manual "Run workflow" button
+
+permissions:
+  contents: write
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install yfinance requests
+
+      - name: Restore credentials from secret
+        run: |
+          mkdir -p config
+          cat > config/monitor_config.json << 'EOF'
+          ${{ secrets.MONITOR_CONFIG }}
+          EOF
+
+      - name: Run weekly screener
+        run: python scripts/weekly_screener.py
+
+      - name: Commit screener history
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/screener_history.csv 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "chore: weekly screener history [skip ci]"
+          git push
