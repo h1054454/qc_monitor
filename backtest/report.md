@@ -122,9 +122,44 @@ not the buy moment.
 7. **Ignore the Mag 7 row's +53%.** It's survivorship bias (we picked today's known
    winners). Treat it as an inflated ceiling, not a strategy.
 
-These set up Phase 5 calibration: lower/retire the dead Brent & US10Y red bands,
-tame NVDA, pull `brent_low` out of the buy-signal aggregate, and treat VIX/KRE/QQQ
-as the workhorses (ideally edge-triggered to stop slow-bear over-firing).
+---
+
+## Calibration results (Phase 5)
+
+**(A) Better entry rules** — quality-basket forward returns by trigger, averaged
+over the crashes each rule fired on (`lead` = avg days before the bottom):
+
+| trigger | fires on | +1m | +3m | +6m | +12m |
+|---|---|---|---|---|---|
+| current (any 1 indicator red) | 5/5 | −3.2% | −1.7% | +0.5% | +15.0% |
+| ≥2 indicators red at once | 4/5 | −0.8% | +3.2% | +3.2% | +20.9% |
+| **≥3 indicators red at once** | 3/5 | **+8.2%** | +8.2% | +11.3% | **+29.9%** |
+| VIX ≥ 30 | 4/5 | −2.1% | −1.0% | +1.5% | +15.0% |
+| VIX ≥ 35 | 4/5 | +2.9% | +4.9% | +6.5% | +21.6% |
+| VIX ≥ 40 | 2/5 | −3.5% | +1.3% | +5.4% | +20.1% |
+| *bought at the bottom* | 5/5 | +12.1% | +16.4% | +17.1% | +35.9% |
+
+Requiring **broad confirmation** is the fix. "≥3 indicators red at once" — which is
+literally the thesis (*institutions dumping everything liquid indiscriminately*) —
+lifts 12-month returns from +15% to **+30%**, positive at every horizon, beating the
+index (+18.7%) and closing most of the gap to the +36% perfect-timing benchmark. The
+cost is conviction vs coverage: it acts on 3 of 5 crashes (skips the sector-only and
+the brief ones). **VIX ≥ 35** is a simpler single-rule alternative (+22%, fires on 4/5).
+
+**(B) Noise reduction:**
+
+- Dropping `brent_low` from the aggregate cuts non-green days from **87% → 57%**.
+- **Edge-triggering** (alert on the transition into red, then re-arm) yields **~9
+  alert episodes/year** instead of a near-daily ping.
+
+## Recommended configuration
+
+1. **Buy trigger: require ≥3 panic indicators red simultaneously** (broad
+   indiscriminate selling) — or VIX ≥ 35 as a simpler proxy. Stop acting on a single red.
+2. **Edge-trigger** alerts (notify on the green→red transition, re-arm on reset).
+3. **Drop `brent_low`** from the buy-signal aggregate (deescalation, not a panic).
+4. **Retire** the never-fired red bands: Brent > $130 and US10Y > 5.5%.
+5. Keep VIX / KRE / QQQ as the workhorses; treat NVDA as confirming-only (noisy).
 
 ## Caveats
 
@@ -136,3 +171,6 @@ as the workhorses (ideally edge-triggered to stop slow-bear over-firing).
   averages); the Mag 7 basket is hindsight winners (survivorship bias); European
   holdings are in local currency (EUR), not FX-converted, so the quality basket
   mixes USD and EUR returns.
+- **Calibration caveat:** the Phase-5 "best" rules are fit to only 3–5 events —
+  directionally sensible (broad panic = the thesis) but a forward hypothesis to
+  watch, not a proven edge.
