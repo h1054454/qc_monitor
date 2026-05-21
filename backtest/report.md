@@ -70,6 +70,26 @@ Cell = days the **first RED** signal fired **before the bottom** (＋ = early,
 Overall (production aggregate, incl. `brent_low`): non-green **87% of all days** —
 398 in-crash vs 1,222 outside.
 
+## Payoff — did buying the signal pay? (Phase 4)
+
+Entry = the tool's first RED panic-signal in each crash window. Baskets bought
+equal-weight (total return, local currency). Average across the 5 crashes:
+
+| basket | +1m | +3m | +6m | +12m |
+|---|---|---|---|---|
+| **QC quality watchlist (thesis)** | −3.2% | −1.7% | +0.5% | **+15.0%** |
+| Magnificent 7 (control) | +2.2% | +16.0% | +40.6% | +53.5% |
+| Broad large-cap (control) | −2.3% | +4.3% | +8.2% | +16.8% |
+| S&P 500 (benchmark) | −1.3% | +5.7% | +12.0% | +18.7% |
+| *quality, bought at the exact bottom* | +12.1% | +16.4% | +17.1% | +35.9% |
+
+**The uncomfortable result: as wired, the signal-timed quality basket underperformed
+even a passive S&P buy at every horizon** (+15.0% vs +18.7% at 12m). But the *same
+stocks bought at the actual bottom* returned +35.9% — so the stocks are fine; **the
+signal's timing is the problem.** It fires too early (e.g. +260 days before the 2022
+bottom), so you buy and keep falling. Confirms Phase 3: the signals flag the regime,
+not the buy moment.
+
 ---
 
 ## Key findings
@@ -94,6 +114,14 @@ Overall (production aggregate, incl. `brent_low`): non-green **87% of all days**
    from `brent_low` (oil under $80 is normal). The aggregate, as wired, is not a
    useful alert.
 
+6. **Buying the signal beat nothing.** The quality basket trailed a passive S&P buy
+   at every horizon — yet the same names bought at the true bottom returned +36% at
+   12m. The edge is destroyed by **entry timing, not stock selection** — the strongest
+   argument yet for edge-triggered signals.
+
+7. **Ignore the Mag 7 row's +53%.** It's survivorship bias (we picked today's known
+   winners). Treat it as an inflated ceiling, not a strategy.
+
 These set up Phase 5 calibration: lower/retire the dead Brent & US10Y red bands,
 tame NVDA, pull `brent_low` out of the buy-signal aggregate, and treat VIX/KRE/QQQ
 as the workhorses (ideally edge-triggered to stop slow-bear over-firing).
@@ -104,4 +132,7 @@ as the workhorses (ideally edge-triggered to stop slow-bear over-firing).
 - **Hurricane** indicator excluded (not backtestable from current sources).
 - **`brent_low`** excluded from the timing analysis (deescalation signal, not a
   crash marker).
-- Forward-return payoff (does buying the signal pay?) is **Phase 4**, not yet run.
+- **Payoff caveats:** 5 events is a tiny sample (the 2022 bear dominates the
+  averages); the Mag 7 basket is hindsight winners (survivorship bias); European
+  holdings are in local currency (EUR), not FX-converted, so the quality basket
+  mixes USD and EUR returns.

@@ -1,0 +1,23 @@
+{
+  "_note": "Backtest-only comparison baskets for Phase 4 payoff. Kept separate so the quality thesis stays measurable against controls. yfinance symbols.",
+  "quality": {
+    "label": "QC quality watchlist (thesis)",
+    "tickers": ["CB", "CINF", "TRV", "PGR", "ACGL", "USB", "MTB", "WFC",
+                "ALV.DE", "MUV2.DE", "HNR1.DE", "DB1.DE", "DHL.DE",
+                "EBS.VI", "VIG.VI", "ANDR.VI", "EVN.VI"]
+  },
+  "mag7": {
+    "label": "Magnificent 7 (tech control)",
+    "tickers": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"]
+  },
+  "broad": {
+    "label": "Broad diversified large-cap (control)",
+    "tickers": ["KO", "PG", "WMT", "COST", "PEP", "JNJ", "UNH", "PFE", "MRK",
+                "CAT", "HON", "GE", "UNP", "XOM", "CVX", "CSCO", "ORCL", "IBM",
+                "MCD", "NKE", "DIS", "V"]
+  },
+  "benchmark": {
+    "label": "S&P 500 index",
+    "tickers": ["^GSPC"]
+  }
+}
