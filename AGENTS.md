@@ -78,7 +78,9 @@ A "buy signal" is triggered when a macro indicator (e.g., VIX spiking above 30) 
 The color system is intentionally inverted from typical "danger = red" conventions:
 - ⚪ `"green"` level = **NORMAL** — no alert, indicator in safe range
 - 🟡 `"amber"` level = **BEOBACHTEN** (Watch) — approaching buy threshold
-- 🟢 `"red"` level = **KAUFSIGNAL** (Buy Signal) — threshold crossed, stocks cheap for wrong reasons
+- 🟢 `"red"` level = a single indicator crossed its buy threshold
+
+**Aggregate signal (calibrated on a 19-year backtest):** a full **KAUFSIGNAL** alert fires only when **≥3 panic indicators are red at once** (broad, indiscriminate selling) or a major hurricane is active. A single red is only BEOBACHTEN. Alerts are **edge-triggered** — sent only when the signal level changes vs the last run. `brent_low` (oil-deescalation) is excluded from the buy aggregate. See `backtest/report.md` and `signal_level()` in `market_monitor.py`.
 
 **Rationale**: A triggered buy signal is a *positive opportunity*, not a danger. Displaying it as green (go) aligns the UI with investor intent.
 
@@ -411,12 +413,17 @@ On the next run, `check_and_welcome_new_subscribers()` automatically sends them 
 
 ---
 
-## 9. Scheduling (Windows)
+## 9. Scheduling (GitHub Actions)
 
-Both scripts are designed for Windows Task Scheduler. Scheduling commands are at the bottom of each script file.
+`market_monitor.py` runs in the cloud via `.github/workflows/market-monitor.yml` —
+**Mon–Fri at 06:00 UTC (~08:00 Vienna)**, independent of any local machine.
+Credentials are injected at runtime from the `MONITOR_CONFIG` / `KNOWN_SUBSCRIBERS`
+repo secrets; `docs/status.html` + `data/indicator_history.csv` are committed back
+each run. Alerts are edge-triggered (only on a signal-level change).
 
-- `market_monitor.py` — daily, 08:00, `StartWhenAvailable` (catches up if PC was off)
-- `weekly_screener.py` — weekly, Monday 07:00, `StartWhenAvailable`
+- `market_monitor.py` — weekday cloud run (GitHub Actions)
+- `weekly_screener.py` — not yet automated; run locally/manually (Windows Task
+  Scheduler commands are at the bottom of the file)
 
 ---
 
