@@ -1,0 +1,5 @@
+event_id,source,classification,peak_date,trough_date,recovery_date,depth_pct,peak_to_trough_td,ongoing
+1,broad (S&P 500),bear,2020-02-19,2020-03-23,2020-08-18,-33.9,23,False
+2,broad (S&P 500),bear,2022-01-03,2022-10-12,2024-01-19,-25.4,195,False
+3,sector (banks),sector,2023-02-07,2023-05-04,2024-11-06,-43.8,60,False
+4,broad (S&P 500),correction,2025-02-19,2025-04-08,2025-06-27,-18.9,34,False
