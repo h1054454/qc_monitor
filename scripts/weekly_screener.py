@@ -44,6 +44,11 @@ CSV_COLUMNS = [
     "consensus", "div_yield_pct", "pb_ratio",
 ]
 
+# Ensure runtime dirs exist before logging opens its file (logs/ is gitignored,
+# so it is absent on a fresh CI checkout — without this the import crashes).
+LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     filename=LOG_PATH,
     level=logging.INFO,
