@@ -19,12 +19,11 @@ from pathlib import Path
 import pandas as pd
 
 BASE   = Path(__file__).resolve().parent.parent.parent
-HIST   = BASE / "backtest" / "data" / "indicator_history_7y.csv"
+HIST   = BASE / "backtest" / "data" / "indicator_history_full.csv"
 EVENTS = BASE / "backtest" / "data" / "crash_events.csv"
 
 IND = [("VIX", "vix_level"), ("KRE", "kre_level"), ("QQQ", "qqq_level"),
        ("NVDA", "nvda_level"), ("Brent", "brent_high_level"), ("US10Y", "us10y_level")]
-NAMES = {1: "COVID", 2: "2022 bear", 3: "2023 banks", 4: "Aug-24 VIX", 5: "2025 tariff"}
 
 
 def main():
@@ -54,29 +53,30 @@ def main():
                 cells[label] = ("amber", None)
             else:
                 cells[label] = ("silent", None)
-        rows.append((NAMES.get(r["event_id"], str(r["event_id"])), r["trough_date"], cells))
+        rows.append((r["label"], r["trough_date"], cells))
 
     # ── Timing matrix (cell = days first RED fired before the trough) ─────────
     print("Signal timing — cell = days first RED fired BEFORE the bottom "
           "(+early / -late, a=amber only, .=silent)\n")
-    print(f"{'event':<13}" + "".join(f"{lbl:>7}" for lbl, _ in IND))
+    print(f"{'event':<20}" + "".join(f"{lbl:>7}" for lbl, _ in IND))
     for name, _, cells in rows:
-        line = f"{name:<13}"
+        line = f"{name:<20}"
         for lbl, _ in IND:
             st, lead = cells[lbl]
             line += f"{(f'{lead:+d}' if st == 'red' else ('a' if st == 'amber' else '.')):>7}"
         print(line)
 
     # ── Per-indicator summary ────────────────────────────────────────────────
-    print("\nPer-indicator hit rate across the 5 crashes:")
+    n = len(rows)
+    print(f"\nPer-indicator hit rate across the {n} crashes:")
     for lbl, _ in IND:
         reds = [c[lbl][1] for _, _, c in rows if c[lbl][0] == "red"]
         amb  = sum(1 for _, _, c in rows if c[lbl][0] in ("red", "amber"))
         med  = (f"median {int(pd.Series(reds).median()):+d}d vs trough" if reds else "—")
-        print(f"  {lbl:<6} red in {len(reds)}/5,  amber+ in {amb}/5   {med}")
+        print(f"  {lbl:<6} red in {len(reds)}/{n},  amber+ in {amb}/{n}   {med}")
 
     # ── False-alarm / noise ──────────────────────────────────────────────────
-    print("\nFalse-alarm check — RED days inside vs outside the 5 crash windows:")
+    print(f"\nFalse-alarm check — RED days inside vs outside the {n} crash windows:")
     for lbl, col in IND:
         rin  = int(((hist[col] == "red") & in_window).sum())
         rout = int(((hist[col] == "red") & ~in_window).sum())

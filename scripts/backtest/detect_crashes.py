@@ -20,8 +20,21 @@ import yfinance as yf
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent     # .../QC_Monitor
 OUT_PATH = BASE_DIR / "backtest" / "data" / "crash_events.csv"
-START    = "2018-06-01"
-REPORT_START = pd.Timestamp("2019-01-01")
+START    = "2006-06-01"
+REPORT_START = pd.Timestamp("2007-01-01")
+
+# Human labels for the well-known crises (matched by the trough year).
+CRISIS_NAMES = {
+    2008: "GFC 2008", 2009: "GFC 2008", 2010: "2010 flash crash",
+    2011: "2011 EU/US debt", 2015: "2015 China/oil", 2016: "2015 China/oil",
+    2018: "2018 Q4 selloff", 2020: "COVID", 2022: "2022 bear",
+    2023: "2023 banks (SVB)", 2024: "Aug-2024 VIX spike", 2025: "2025 tariff",
+}
+
+
+def label_for(trough, source):
+    name = CRISIS_NAMES.get(trough.year)
+    return name if name else f"{trough.year} ({source.split()[0]})"
 
 
 def detect_drawdowns(close: pd.Series, min_depth: float, peak_window=None):
@@ -191,21 +204,22 @@ def main():
     df = pd.DataFrame(events)
     df = df[df["trough_date"] >= REPORT_START].sort_values("peak_date").reset_index(drop=True)
     df.insert(0, "event_id", range(1, len(df) + 1))
+    df["label"] = [label_for(t, s) for t, s in zip(df["trough_date"], df["source"])]
 
     # Tidy date formatting for output
     out = df.copy()
     for c in ["peak_date", "trough_date", "recovery_date"]:
         out[c] = out[c].apply(lambda d: d.strftime("%Y-%m-%d") if pd.notna(d) else "ongoing")
-    cols = ["event_id", "source", "classification", "peak_date", "trough_date",
+    cols = ["event_id", "label", "source", "classification", "peak_date", "trough_date",
             "recovery_date", "depth_pct", "peak_to_trough_td", "ongoing"]
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     out[cols].to_csv(OUT_PATH, index=False)
 
-    print(f"Detected {len(out)} crash events (2019 -> today):\n")
-    print(f"{'#':>2}  {'source':<16} {'class':<11} {'peak':<11} {'trough':<11} "
+    print(f"Detected {len(out)} crash events (2007 -> today):\n")
+    print(f"{'#':>2}  {'label':<20} {'source':<16} {'peak':<11} {'trough':<11} "
           f"{'recovery':<11} {'depth':>6}  td")
     for _, r in out.iterrows():
-        print(f"{r.event_id:>2}  {r.source:<16} {r.classification:<11} {r.peak_date:<11} "
+        print(f"{r.event_id:>2}  {r.label:<20} {r.source:<16} {r.peak_date:<11} "
               f"{r.trough_date:<11} {r.recovery_date:<11} {r.depth_pct:>5}%  {r.peak_to_trough_td}")
     print(f"\nWrote {OUT_PATH.relative_to(BASE_DIR)}")
 

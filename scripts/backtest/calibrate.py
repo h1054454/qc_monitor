@@ -16,7 +16,7 @@ import pandas as pd
 import yfinance as yf
 
 BASE    = Path(__file__).resolve().parent.parent.parent
-HIST    = BASE / "backtest" / "data" / "indicator_history_7y.csv"
+HIST    = BASE / "backtest" / "data" / "indicator_history_full.csv"
 EVENTS  = BASE / "backtest" / "data" / "crash_events.csv"
 BASKETS = BASE / "backtest" / "baskets.json"
 
@@ -63,7 +63,7 @@ def main():
     ev = pd.read_csv(EVENTS)
     ev["peak_date"] = pd.to_datetime(ev["peak_date"])
     ev["trough_date"] = pd.to_datetime(ev["trough_date"])
-    closes = yf.download(sorted(set(q)), start="2018-06-01", auto_adjust=True, progress=False)["Close"]
+    closes = yf.download(sorted(set(q)), start="2006-06-01", auto_adjust=True, progress=False)["Close"]
 
     windows = []
     for _, r in ev.iterrows():
@@ -93,8 +93,8 @@ def main():
             else:
                 whens.append(None)
         lead = f"{int(sum(leads) / len(leads))}" if leads else "-"
-        print(rrow(name, f"{sum(x is not None for x in whens)}/5", lead, basket_avg(closes, q, whens)))
-    print(rrow("bought at the bottom", "5/5", "0", basket_avg(closes, q, [t for t, _ in windows])))
+        print(rrow(name, f"{sum(x is not None for x in whens)}/{len(windows)}", lead, basket_avg(closes, q, whens)))
+    print(rrow("bought at the bottom", f"{len(windows)}/{len(windows)}", "0", basket_avg(closes, q, [t for t, _ in windows])))
 
     # (B) Noise
     cur = (hist["overall_level"] != "green").mean() * 100

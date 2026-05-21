@@ -42,6 +42,10 @@ jeden Tag aufs Neue.
 2. **Das Signal feuert oft etwas VOR dem Tiefpunkt** (historisch im Schnitt
    einige Wochen früher). Deshalb: **gestaffelt kaufen** (z. B. in 2–3 Tranchen),
    nicht alles auf einmal — der Kurs kann nach dem Signal noch weiter fallen.
+   In einer schweren, langen Krise (wie 2008) kann das Signal sogar **mehrfach**
+   feuern und über ein Jahr im Minus bleiben — gestaffeltes Kaufen ist dann
+   besonders wichtig. Der 19-Jahres-Test zeigt: 22 von 27 Auslösungen waren nach
+   12 Monaten im Plus, aber die 5 Verlierer waren alle 2008.
 3. Es ist ein **Timing-Helfer**, kein Vorhersage-Orakel und **keine
    Anlageberatung**. Alle Entscheidungen triffst du selbst, auf eigenes Risiko.
 4. Zwei Schwellen lösen praktisch nie aus (Brent > 130 $, US-Zins > 5,5 %) — das

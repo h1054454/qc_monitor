@@ -24,9 +24,9 @@ BASE_DIR    = SCRIPTS_DIR.parent                            # .../QC_Monitor
 sys.path.insert(0, str(SCRIPTS_DIR))
 import market_monitor as mm                                  # noqa: E402
 
-START        = "2018-06-01"     # ~6-7 months warmup before the report window (52w-high refs)
-REPORT_START = "2019-01-01"     # first date we keep in the output
-OUT_PATH     = BASE_DIR / "backtest" / "data" / "indicator_history_7y.csv"
+START        = "2006-06-01"     # KRE inception (~2006-06-19) — earliest all indicators exist
+REPORT_START = "2007-01-01"     # first date we keep (captures the 2007-09 GFC peak onward)
+OUT_PATH     = BASE_DIR / "backtest" / "data" / "indicator_history_full.csv"
 LIVE_CSV     = BASE_DIR / "data" / "indicator_history.csv"
 
 LEVEL_COLS = ["vix_level", "kre_level", "qqq_level", "nvda_level",

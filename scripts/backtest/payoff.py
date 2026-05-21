@@ -17,13 +17,12 @@ import pandas as pd
 import yfinance as yf
 
 BASE    = Path(__file__).resolve().parent.parent.parent
-HIST    = BASE / "backtest" / "data" / "indicator_history_7y.csv"
+HIST    = BASE / "backtest" / "data" / "indicator_history_full.csv"
 EVENTS  = BASE / "backtest" / "data" / "crash_events.csv"
 BASKETS = BASE / "backtest" / "baskets.json"
 
 PANIC = ["vix_level", "kre_level", "qqq_level", "nvda_level", "brent_high_level", "us10y_level"]
 HOR   = {"+1m": 21, "+3m": 63, "+6m": 126, "+12m": 252}
-NAMES = {1: "COVID", 2: "2022 bear", 3: "2023 banks", 4: "Aug-24 VIX", 5: "2025 tariff"}
 
 
 def fwd(series, when, horizons):
@@ -71,7 +70,7 @@ def main():
     ev["trough_date"] = pd.to_datetime(ev["trough_date"])
 
     all_tickers = sorted({t for b in baskets.values() if isinstance(b, dict) for t in b["tickers"]})
-    closes = yf.download(all_tickers, start="2018-06-01", auto_adjust=True, progress=False)["Close"]
+    closes = yf.download(all_tickers, start="2006-06-01", auto_adjust=True, progress=False)["Close"]
 
     entries, troughs = [], []
     print("Entry = first panic-red signal in each crash window:")
@@ -82,9 +81,9 @@ def main():
         entries.append(entry)
         troughs.append(r["trough_date"])
         tag = f"{entry.date()} ({(r['trough_date'] - entry).days:+d}d vs bottom)" if entry is not None else "no signal"
-        print(f"  {NAMES.get(r['event_id'], r['event_id']):<12} {tag}")
+        print(f"  {r['label']:<20} {tag}")
 
-    print("\nForward return after the RED signal — avg across the 5 crashes:\n")
+    print(f"\nForward return after the RED signal — avg across the {len(ev)} crashes:\n")
     print(f"{'basket':<34}" + "".join(h.rjust(8) for h in HOR))
     for key in ["quality", "mag7", "broad", "benchmark"]:
         b = baskets[key]

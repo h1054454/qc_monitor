@@ -1,6 +1,13 @@
-event_id,source,classification,peak_date,trough_date,recovery_date,depth_pct,peak_to_trough_td,ongoing
-1,broad (S&P 500),bear,2020-02-19,2020-03-23,2020-08-18,-33.9,23,False
-2,broad (S&P 500),bear,2022-01-03,2022-10-12,2024-01-19,-25.4,195,False
-3,sector (banks),sector,2023-02-07,2023-05-04,2024-11-06,-43.8,60,False
-4,vol spike (VIX),vol-spike,2024-07-16,2024-08-05,2024-09-19,-8.5,14,False
-5,broad (S&P 500),correction,2025-02-19,2025-04-08,2025-06-27,-18.9,34,False
+event_id,label,source,classification,peak_date,trough_date,recovery_date,depth_pct,peak_to_trough_td,ongoing
+1,GFC 2008,broad (S&P 500),bear,2007-10-09,2009-03-09,2013-03-28,-56.8,355,False
+2,GFC 2008,sector (banks),sector,2009-05-08,2009-06-23,2010-01-08,-24.2,31,False
+3,2010 flash crash,sector (banks),sector,2010-04-23,2010-06-08,2012-03-15,-20.5,31,False
+4,2011 EU/US debt,sector (banks),sector,2011-04-28,2011-08-19,2012-02-03,-27.0,79,False
+5,2015 China/oil,broad (S&P 500),correction,2015-05-21,2016-02-11,2016-07-11,-14.2,183,False
+6,2018 Q4 selloff,broad (S&P 500),correction,2018-01-26,2018-02-08,2018-08-24,-10.2,9,False
+7,2018 Q4 selloff,broad (S&P 500),correction,2018-09-20,2018-12-24,2019-04-23,-19.8,65,False
+8,COVID,broad (S&P 500),bear,2020-02-19,2020-03-23,2020-08-18,-33.9,23,False
+9,2022 bear,broad (S&P 500),bear,2022-01-03,2022-10-12,2024-01-19,-25.4,195,False
+10,2023 banks (SVB),sector (banks),sector,2023-02-07,2023-05-04,2024-11-06,-43.8,60,False
+11,Aug-2024 VIX spike,vol spike (VIX),vol-spike,2024-07-16,2024-08-05,2024-09-19,-8.5,14,False
+12,2025 tariff,broad (S&P 500),correction,2025-02-19,2025-04-08,2025-06-27,-18.9,34,False
