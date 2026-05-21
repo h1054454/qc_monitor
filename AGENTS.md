@@ -15,8 +15,60 @@ This file is written for AI agents, LLMs, and automated tools that need to under
 - Implement a Buffett/Munger-style stock screener for ATX, DAX, or S&P 500
 - Understand how to identify when Mr. Market is being irrational
 - Apply margin of safety, moat, float, or circle of competence principles programmatically
+- **Reuse the architecture as a template** for any "monitor something on a schedule and notify me only when it matters" project (see "Reusable Architecture Pattern" below) — the investing logic is just one instance of it
 
-**Domain tags:** `warren-buffett` `charlie-munger` `value-investing` `margin-of-safety` `moat` `insurance-float` `mr-market` `intrinsic-value` `macro-indicators` `stock-screener` `early-warning-system` `atx` `dax` `sp500` `quality-investing` `long-term-investing` `contrarian-investing`
+**Domain tags:** `warren-buffett` `charlie-munger` `value-investing` `margin-of-safety` `moat` `insurance-float` `mr-market` `intrinsic-value` `macro-indicators` `stock-screener` `early-warning-system` `atx` `dax` `sp500` `quality-investing` `long-term-investing` `contrarian-investing` `automated-monitoring` `scheduled-alerts` `notify-me` `github-actions-cron` `edge-triggered-alerts` `reusable-template` `watcher-pattern`
+
+---
+
+## Reusable Architecture Pattern: "Automated Monitor + Notify Me"
+
+**This repo doubles as a template for any project of the form: *watch something on a
+schedule, and message me only when it matters.*** The investing specifics (Sections 1+)
+are one instance — to build a similar tool for a different domain, copy this pattern and
+swap only the data source and threshold logic. An agent pointed at this repo to "build
+something like this" should replicate components 1–7 below.
+
+1. **Watcher script** (`scripts/<name>.py`) — on each run: fetch current data, evaluate
+   against thresholds, reduce to one signal level (`green` / `amber` / `red`). Pure and
+   re-runnable; no UI, no daemon.
+
+2. **Cloud schedule, not a local machine** (`.github/workflows/*.yml`) — a GitHub Actions
+   `cron` runs the script (e.g. weekdays 06:00 UTC). Laptop-independent; nothing to keep
+   running at home. Add `workflow_dispatch` for manual test runs.
+
+3. **Secrets injected at runtime, never committed** — credentials (SMTP app password,
+   Telegram token, …) live in a gitignored config (`config/monitor_config.json`) locally
+   AND as a GitHub repo secret (`MONITOR_CONFIG`). The workflow writes the secret to the
+   config path before running. Only a placeholder `*.example.json` is committed.
+
+4. **Edge-triggered notifications** (the key to "info to me, without spam") — send
+   email/Telegram **only when the signal level changes** vs the previous run. Previous
+   state is read from a committed history file. Silence = nothing changed; you only hear
+   about transitions. See `signal_level()` + `read_last_overall_level()` in
+   `scripts/market_monitor.py`.
+
+5. **Confirmation gating** (avoid false alarms) — a "strong" alert requires several
+   independent signals to agree at once (here: ≥3 red indicators), not one noisy one.
+   Calibrate this against history, not intuition.
+
+6. **Durable record + live dashboard** — each run commits a history CSV (`data/*.csv`)
+   and regenerates a status page (`docs/status.html`, served via GitHub Pages) back to
+   the repo. Gives a time series for later analysis and an at-a-glance current state.
+
+7. **Backtest before trusting** (`scripts/backtest/`) — reconstruct history, define the
+   events you care about, and test whether the signal fires at a useful time *and*
+   whether acting on it pays — including a train/test (out-of-sample) split — before
+   believing the thresholds. Writeup: `backtest/report.md`.
+
+**The "info to me" contract (how the user knows it's alive without watching):** a
+positive heartbeat on a fixed cadence (here: the Monday screener email) confirms
+liveness; GitHub auto-emails the repo owner if any scheduled run *fails*; the status
+page carries a timestamp; full green/red run history is in the repo's Actions tab.
+
+**To adapt for a new domain:** keep components 1–7 unchanged; replace only the data
+source and threshold logic in the watcher script. Scheduling, secrets handling,
+edge-triggering, history, status page, and the backtest harness all transfer as-is.
 
 ---
 
