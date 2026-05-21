@@ -11,15 +11,24 @@ Macro events — a banking panic, a tech selloff, an oil price spike — cause i
 
 ## What you receive
 
-A daily morning message (email + Telegram) that looks like this:
+The tool messages you (email + Telegram) **only when the signal level changes** —
+not every day. No message means nothing has changed. A **KAUFSIGNAL** (buy signal)
+fires only on a *broad* panic: **3 or more indicators red at once**. A single red
+indicator is only BEOBACHTEN (watch), not a buy — the 7-year backtest showed acting
+on a single red loses to the index, while requiring broad confirmation beats it.
+
+A KAUFSIGNAL message looks like this:
 
 ```
 🟢 KAUFSIGNAL - Markt-Monitor
-16.05.2026, 08:00
+12.03.2020, 08:00
 
-🟡 US 10-Jahres-Staatsanleihe (Rendite)
-   4,60% - Gelb ab 4,5%, Rot ab 5,5%
-   US-Haushaltsstress — KGV-Multiples werden mechanisch gedrückt
+🟢 VIX Angst-Index
+   52,00 - Gelb ab 20, Rot ab 30
+   Breite Marktpanik — unterschiedsloser Ausverkauf
+
+🟢 Nasdaq 100: -22% vom 52W-Hoch - Gelb ab -10%, Rot ab -20%
+🟢 NVIDIA: -38% vom 52W-Hoch - Gelb ab -20%, Rot ab -35%
 
    Günstig im S&P 500: Cincinnati Financial, Chubb, Travelers, ...
    Günstig im DAX: Allianz SE, Munich Re, Hannover Rück
@@ -27,14 +36,11 @@ A daily morning message (email + Telegram) that looks like this:
 
    → Aktuelle Nachrichten
 
-⚪ VIX Angst-Index: 18,50 - Gelb ab 20, Rot ab 30
-⚪ Nasdaq 100: -1,5% vom 52W-Hoch - Gelb ab -10%, Rot ab -20%
-...
-
 ⚪ NORMAL = Kein Signal  🟡 BEOBACHTEN = Im Auge behalten  🟢 KAUFSIGNAL = Jetzt handeln
 ```
 
-When everything is normal, you hear nothing. The tool is silent until something matters.
+When everything is normal — or unchanged since the last message — you hear nothing.
+A full KAUFSIGNAL is rare by design (roughly 1–2 times a year).
 
 ---
 
