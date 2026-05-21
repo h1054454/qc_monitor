@@ -132,6 +132,29 @@ def merge_overlapping(events):
     return merged
 
 
+def build_event_around(close: pd.Series, anchor: pd.Timestamp, lookback=63):
+    """Build one event from price data around a known anchor date (curated events
+    the auto-rules miss because they were too brief, e.g. the Aug-2024 VIX spike)."""
+    close = close.dropna()
+    loc = close.index.get_loc
+    i = close.index.get_indexer([anchor], method="nearest")[0]
+    lo, hi = max(0, i - 7), min(len(close) - 1, i + 7)
+    trough = close.iloc[lo:hi + 1].idxmin()                 # snap to the real local low
+    peak_date = close.iloc[max(0, loc(trough) - lookback):loc(trough) + 1].idxmax()
+    peak_val = close.loc[peak_date]
+    post = close.loc[trough:]
+    regained = post[post >= peak_val]
+    ongoing = regained.empty
+    return {
+        "peak_date": peak_date,
+        "trough_date": trough,
+        "recovery_date": None if ongoing else regained.index[0],
+        "depth_pct": round(float(close.loc[trough] / peak_val - 1) * 100, 1),
+        "peak_to_trough_td": loc(trough) - loc(peak_date),
+        "ongoing": ongoing,
+    }
+
+
 def main():
     data = yf.download(["^GSPC", "KRE", "QQQ"], start=START,
                        auto_adjust=True, progress=False)["Close"]
@@ -155,7 +178,16 @@ def main():
             sector.append(e)
 
     sector = merge_overlapping(sector)
-    events = broad + sector
+
+    # Curated events too brief for the auto-rules. Built from real ^GSPC prices.
+    manual = []
+    for anchor in ["2024-08-05"]:                           # carry-trade unwind / VIX ~65
+        e = build_event_around(data["^GSPC"], pd.Timestamp(anchor))
+        e["source"] = "vol spike (VIX)"
+        e["classification"] = "vol-spike"
+        manual.append(e)
+
+    events = broad + sector + manual
     df = pd.DataFrame(events)
     df = df[df["trough_date"] >= REPORT_START].sort_values("peak_date").reset_index(drop=True)
     df.insert(0, "event_id", range(1, len(df) + 1))
