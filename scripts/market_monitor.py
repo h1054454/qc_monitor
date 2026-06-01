@@ -216,8 +216,11 @@ INDICATORS = {
         "ticker": "^MOVE",
         "label": "MOVE-Index (Anleihe-Volatilität)",
         "check": "above",
-        "amber": 110,
-        "red": 150,
+        # Calibrated 2026-06-01 against 2011/2018/2020 (backtest_move_periphery.py):
+        # COVID peaked 164 (red), 2011 peaked 118 (amber), 2018 stayed ~68 (green,
+        # correctly — it was equity not bond stress). MOVE is the bond-shock indicator.
+        "amber": 100,
+        "red": 140,
         "scenario": "Anleihemarkt-Stress -Frühwarnung für Fiskal-/Treasury-Schock",
         "why_discount": (
             "Der MOVE-Index ist der VIX für Anleihen: er misst die erwartete Schwankung "
@@ -239,8 +242,13 @@ INDICATORS = {
 # are recalibrated for it and are provisional until back-tested against 2011/2018.
 PERIPHERY = {
     "label": "Euro-Peripherie-Spread (10J, alle Bonds − AAA)",
-    "amber": 70,    # bp -European sovereign stress building
-    "red":   120,   # bp -fear mode; DAX quality on sale
+    # Calibrated 2026-06-01 against 2011/2018/2020 (backtest_move_periphery.py).
+    # This composite (all-bonds minus AAA) runs much narrower than the raw BTP-Bund
+    # spread: peaks were 2011=148bp, COVID=97bp, 2018-autumn=94bp, 2018-Feb=60bp.
+    # amber 50 / red 100 makes 2011 clearly red (the EU-debt stress test, where it
+    # went red 35d before the trough) and the milder episodes amber.
+    "amber": 50,    # bp -European sovereign stress building
+    "red":   100,   # bp -fear mode; DAX quality on sale
     "scenario": "Europäischer Staatsschuldenstress -DAX-Qualität wird breit ausverkauft",
     "why_discount": (
         "Jedes europäische Finanzstress-Ereignis der letzten 15 Jahre begann mit einem "

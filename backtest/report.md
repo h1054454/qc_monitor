@@ -146,3 +146,39 @@ signal → +18.4%, beating **61%** of random days. A **real but modest** edge.
   members; treat as rough context, not strategies.
 - **European holdings** are in local currency (EUR), not FX-converted.
 - **Hurricane** indicator excluded (not backtestable from current sources).
+
+---
+
+## Addendum (2026-06-01): MOVE + Euro-periphery spread
+
+Two indicators added later and back-tested separately via
+`scripts/backtest/backtest_move_periphery.py` against the three crises that matter
+for them (2011 EU/US debt, 2018 Q4, COVID 2020). Data: `^MOVE` (yfinance, from 2010)
++ ECB daily yield curve (all-bonds-10Y minus AAA-10Y). Thresholds imported from
+production, then **calibrated** from the observed crisis peaks.
+
+**Final thresholds:** MOVE amber 100 / red 140 · Periphery amber 50 / red 100 bp.
+
+| Crisis | MOVE | Periphery (bp) |
+|---|---|---|
+| 2011 EU/US debt | amber (peak 118) | **RED, 44d before trough** (peak 148) |
+| 2018 Q4 (Feb) | green (peak 70) — equity stress | amber (peak 60) |
+| 2018 Q4 (autumn) | green (peak 68) | amber (peak 94) |
+| COVID 2020 | **RED, 14d before trough** (peak 164) | amber (peak 97) |
+
+**Reading:** each fires on *its* crisis and stays quiet otherwise — periphery red on
+the 2011 EU-debt stress, MOVE red on the COVID bond shock; both correctly muted in
+2018 (an equity, not bond/sovereign, event).
+
+**Honest caveats:**
+- COVID periphery peaked **97bp — just under the 100bp red line**. Left as-is rather
+  than lowering red to ~95: that would overfit one point, and COVID was a global/US
+  shock, not a *European sovereign* one — amber is conceptually correct there.
+- **MOVE does NOT lead the VIX** (the original hope): in COVID the VIX went red 11d
+  *before* MOVE. MOVE is a *bond-shock confirmer* (fiscal/Treasury/rate stress), not a
+  general early-warner. It correctly stayed green through the equity-only 2018 selloffs.
+- **Still informational only.** Both remain OUT of `BROAD_PANIC_KEYS` (the ≥3
+  KAUFSIGNAL rule). They drive their own amber/red and lift the overall to BEOBACHTEN,
+  but a richer multi-crisis sample is needed before letting them count toward a buy
+  trigger. Periphery is the stronger candidate (clean 2011 red, 44d early); MOVE is a
+  confirmer at best.

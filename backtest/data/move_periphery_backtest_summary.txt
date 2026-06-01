@@ -1,0 +1,31 @@
+
+======================================================================
+BACKTEST — MOVE + Euro-periphery spread vs target crises
+Thresholds (production): MOVE amber 100/red 140 · Periphery amber 50/red 100 bp
+======================================================================
+
+### 2011 EU/US debt   (peak 2011-04-28 → trough 2011-08-19)
+  MOVE       peak  117.8 | at trough  100.3 | only AMBER (first 2011-08-05, 14d before trough) — never red
+  Periphery  peak  148.3 bp | at trough  123.3 bp | first RED 2011-07-06 (44d BEFORE trough)
+  → VIX went red (2011-08-04) but MOVE did not — MOVE missed this one
+
+### 2018 Q4 (Feb)   (peak 2018-01-26 → trough 2018-02-08)
+  MOVE       peak   69.9 | at trough   67.8 | stayed GREEN — no signal
+  Periphery  peak   60.4 bp | at trough   46.5 bp | only AMBER (first 2018-01-08, 31d before trough) — never red
+  → VIX went red (2018-02-05) but MOVE did not — MOVE missed this one
+
+### 2018 Q4 selloff   (peak 2018-09-20 → trough 2018-12-24)
+  MOVE       peak   68.3 | at trough   66.0 | stayed GREEN — no signal
+  Periphery  peak   94.0 bp | at trough   83.9 bp | only AMBER (first 2018-08-31, 115d before trough) — never red
+  → VIX went red (2018-12-21) but MOVE did not — MOVE missed this one
+
+### COVID   (peak 2020-02-19 → trough 2020-03-23)
+  MOVE       peak  163.7 | at trough  135.4 | first RED 2020-03-09 (14d BEFORE trough)
+  Periphery  peak   97.3 bp | at trough   76.6 bp | only AMBER (first 2020-02-27, 25d before trough) — never red
+  → MOVE first red 2020-03-09 vs VIX first red 2020-02-27: VIX led by 11d
+
+======================================================================
+Reading: a useful buy-timer indicator goes RED at/just-before the trough.
+Red well BEFORE the trough = early but may be premature; AMBER-only or GREEN
+through a crisis = thresholds too loose for that indicator.
+======================================================================
