@@ -1263,15 +1263,29 @@ def build_telegram_message(alerts, all_statuses):
 # Order = how they appear in the weekly message. Thresholds are pulled live from
 # INDICATORS / PERIPHERY so this never drifts from the production config.
 _HEARTBEAT_ROWS = [
-    ("VIX",        "vix",           "VIX",     "",     1),
-    ("KRE",        "kre_14d_pct",   "KRE 14T", "%",    1),
-    ("QQQ",        "qqq_52w_pct",   "QQQ",     "%",    1),
-    ("NVDA",       "nvda_52w_pct",  "NVDA",    "%",    1),
-    ("BRENT_HIGH", "brent",         "Brent",   " $",   1),
-    ("US10Y",      "us10y",         "US-10J",  "%",    2),
-    ("MOVE",       "move",          "MOVE",    "",     0),
-    ("PERIPHERY",  "periph_spread", "Peripherie", " bp", 0),
+    ("VIX",        "vix",           "VIX (Angst-Index)",          "",     1),
+    ("KRE",        "kre_14d_pct",   "KRE (US-Regionalbanken)",    "%",    1),
+    ("QQQ",        "qqq_52w_pct",   "QQQ (Nasdaq/Tech)",          "%",    1),
+    ("NVDA",       "nvda_52w_pct",  "NVDA (KI-Stimmung)",         "%",    1),
+    ("BRENT_HIGH", "brent",         "Brent (Ölpreis)",            " $",   1),
+    ("US10Y",      "us10y",         "US-10J (US-Zins)",           "%",    2),
+    ("MOVE",       "move",          "MOVE (Anleihe-Volatilität)", "",     0),
+    ("PERIPHERY",  "periph_spread", "Peripherie (EU-Staatsanl.)", " bp",  0),
 ]
+
+# One-line plain-language explainer per indicator: what it measures → what a RED
+# reading means → which watchlist names get cheap. Shown under each line when
+# heartbeat_explanations is on (default). Turn off once the eight are familiar.
+_HEARTBEAT_EXPLAIN = {
+    "VIX":        "Marktangst. Rot = Panik-Ausverkauf, Qualität fällt pauschal mit.",
+    "KRE":        "US-Regionalbanken. Rot = Bankenangst → USB, M&T fallen mit dem Sektor.",
+    "QQQ":        "Tech-Index. Rot = Tech-Korrektur, reißt auch Nicht-Tech mit nach unten.",
+    "NVDA":       "KI-Frühindikator. Rot = KI-Stimmung kippt → breiter Tech-Ausverkauf.",
+    "BRENT_HIGH": "Ölpreis/Iran. Rot (>130$) = Eskalation → EU-Aktien fallen breit.",
+    "US10Y":      "US-Zins. Rot (>5,5%) = höhere Zinsen drücken alle Aktien-Bewertungen.",
+    "MOVE":       "„VIX für Anleihen\". Rot = Anleihe-Schock, Vorbote für Zins-/Fiskal-Stress.",
+    "PERIPHERY":  "EU-Schuldenstress (Italien). Rot = Allianz, Munich Re, Dt. Börse auf Sale.",
+}
 
 _LEVEL_ICON = {"green": "🟢", "amber": "🟡", "red": "🔴"}
 
@@ -1295,14 +1309,16 @@ def _next_threshold_text(key, level):
     return f"→ {word} {prep} {_de_thr(val, unit)}"
 
 
-def build_heartbeat_message(all_statuses, raw):
+def build_heartbeat_message(all_statuses, raw, explanations=True):
     """Weekly 'still alive' ping for quiet days.
 
     Edge-triggered alerts mean silence on unchanged days — which is ambiguous:
     all-quiet, or the job is broken? This weekly Telegram message removes that
     ambiguity. If it stops arriving, something is broken (Action, yfinance, or an
     expired secret). One per indicator, with the next threshold to watch, plus a
-    standing reminder of why we do this.
+    standing reminder of why we do this. With explanations=True (default) each
+    indicator gets a one-line plain-language explainer; turn off via config once
+    the eight are familiar.
     """
     overall = raw.get("overall_level", "green")
     overall_txt = {
@@ -1330,6 +1346,8 @@ def build_heartbeat_message(all_statuses, raw):
         icon  = _LEVEL_ICON.get(level, "🟢")
         nxt   = _next_threshold_text(key, level)
         lines.append(f"{icon} <b>{label}</b> {_de_num(val, dec)}{unit} {nxt}")
+        if explanations and key in _HEARTBEAT_EXPLAIN:
+            lines.append(f"   <i>{_HEARTBEAT_EXPLAIN[key]}</i>")
 
     lines += [
         "",
@@ -2040,10 +2058,11 @@ def main():
     # out (a real alert is itself proof of life) and only on the configured
     # weekday (default Monday = 0). Telegram only — one low-friction ping.
     hb_enabled = cfg.get("heartbeat_enabled", True)
-    hb_weekday = cfg.get("heartbeat_weekday", 0)   # 0 = Monday
+    hb_weekday = cfg.get("heartbeat_weekday", 0)        # 0 = Monday
+    hb_explain = cfg.get("heartbeat_explanations", True)  # per-indicator explainers
     if hb_enabled and not alert_sent and datetime.now().weekday() == hb_weekday:
         try:
-            if send_telegram(cfg, build_heartbeat_message(all_statuses, raw)):
+            if send_telegram(cfg, build_heartbeat_message(all_statuses, raw, hb_explain)):
                 log.info("Heartbeat sent")
                 print(f"[{datetime.now():%Y-%m-%d %H:%M}] Heartbeat sent")
             else:
