@@ -1259,36 +1259,86 @@ def build_telegram_message(alerts, all_statuses):
     return "\n".join(lines)
 
 
+# Heartbeat per-indicator display: (raw-value key, short label, unit, decimals).
+# Order = how they appear in the weekly message. Thresholds are pulled live from
+# INDICATORS / PERIPHERY so this never drifts from the production config.
+_HEARTBEAT_ROWS = [
+    ("VIX",        "vix",           "VIX",     "",     1),
+    ("KRE",        "kre_14d_pct",   "KRE 14T", "%",    1),
+    ("QQQ",        "qqq_52w_pct",   "QQQ",     "%",    1),
+    ("NVDA",       "nvda_52w_pct",  "NVDA",    "%",    1),
+    ("BRENT_HIGH", "brent",         "Brent",   " $",   1),
+    ("US10Y",      "us10y",         "US-10J",  "%",    2),
+    ("MOVE",       "move",          "MOVE",    "",     0),
+    ("PERIPHERY",  "periph_spread", "Peripherie", " bp", 0),
+]
+
+_LEVEL_ICON = {"green": "🟢", "amber": "🟡", "red": "🔴"}
+
+
+def _next_threshold_text(key, level):
+    """Text for the NEXT threshold: green -> show amber, amber -> show red, red -> done."""
+    if key == "PERIPHERY":
+        amber, red, check, unit = PERIPHERY["amber"], PERIPHERY["red"], "above", " bp"
+    else:
+        ind = INDICATORS.get(key)
+        if not ind:
+            return ""
+        amber, red, check, unit = ind["amber"], ind["red"], ind["check"], INDICATOR_UNITS.get(key, "")
+    if level == "green":
+        word, val = "Gelb", amber
+    elif level == "amber":
+        word, val = "Rot", red
+    else:
+        return "bereits ROT"
+    prep = "unter" if check == "below" else "ab"
+    return f"→ {word} {prep} {_de_thr(val, unit)}"
+
+
 def build_heartbeat_message(all_statuses, raw):
     """Weekly 'still alive' ping for quiet days.
 
     Edge-triggered alerts mean silence on unchanged days — which is ambiguous:
-    all-quiet, or the job is broken? This compact weekly Telegram message removes
-    that ambiguity. If it stops arriving, something is broken (Action, yfinance,
-    or an expired secret). One block, once a week — low friction by design.
+    all-quiet, or the job is broken? This weekly Telegram message removes that
+    ambiguity. If it stops arriving, something is broken (Action, yfinance, or an
+    expired secret). One per indicator, with the next threshold to watch, plus a
+    standing reminder of why we do this.
     """
     overall = raw.get("overall_level", "green")
-    icon = {
-        "red":   "🟢 KAUFSIGNAL",
-        "amber": "🟡 BEOBACHTEN",
-        "green": "⚪ ALLES GRÜN",
-    }.get(overall, "⚪ ALLES GRÜN")
+    overall_txt = {
+        "red":   "🔴 KAUFSIGNAL — jetzt handeln",
+        "amber": "🟡 BEOBACHTEN — genau hinsehen",
+        "green": "🟢 ALLES GRÜN — nichts zu tun",
+    }.get(overall, "🟢 ALLES GRÜN — nichts zu tun")
 
-    def n(v, d=2):
-        return _de_num(v, d) if v is not None else "—"
+    level_by_key = {s["key"]: s["level"] for s in all_statuses}
 
     lines = [
         "💚 <b>QC-Monitor läuft</b> — wöchentlicher Statuscheck",
         f"<b>{_de_date()}, {datetime.now():%H:%M}</b>",
         "",
-        f"Gesamtampel: <b>{icon}</b>",
-        (f"VIX {n(raw.get('vix'), 1)} · Brent {n(raw.get('brent'), 1)} $ · "
-         f"US-10J {n(raw.get('us10y'), 2)} % · MOVE {n(raw.get('move'), 0)} · "
-         f"KRE {n(raw.get('kre_14d_pct'), 1)} % · QQQ {n(raw.get('qqq_52w_pct'), 1)} % · "
-         f"NVDA {n(raw.get('nvda_52w_pct'), 1)} % · Periph {n(raw.get('periph_spread'), 0)} bp"),
+        f"Gesamtampel: <b>{overall_txt}</b>",
         "",
-        "Indikatoren werden werktäglich geprüft; Alarme kommen nur bei Ampel-Wechsel.",
-        "<i>Diese Nachricht kommt automatisch jeden Montag. Bleibt sie aus, ist etwas kaputt.</i>",
+    ]
+
+    for key, rawkey, label, unit, dec in _HEARTBEAT_ROWS:
+        val = raw.get(rawkey)
+        if val is None:
+            lines.append(f"⚪ <b>{label}</b>: keine Daten")
+            continue
+        level = level_by_key.get(key, "green")
+        icon  = _LEVEL_ICON.get(level, "🟢")
+        nxt   = _next_threshold_text(key, level)
+        lines.append(f"{icon} <b>{label}</b> {_de_num(val, dec)}{unit} {nxt}")
+
+    lines += [
+        "",
+        "🎯 <b>Warum das hier läuft:</b> Wir warten geduldig auf die seltenen Momente, "
+        "in denen der Markt Qualität aus Angst zu billig verkauft — und kaufen dann in "
+        "Tranchen. Meistens ist nichts zu tun (grün). Diese Indikatoren zeigen früh, "
+        "wann sich ein Discount-Fenster nähert.",
+        "",
+        "<i>Kommt automatisch jeden Montag. Bleibt die Nachricht aus, ist etwas kaputt.</i>",
     ]
     return "\n".join(lines)
 
