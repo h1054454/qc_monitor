@@ -1144,6 +1144,39 @@ def build_telegram_message(alerts, all_statuses):
     return "\n".join(lines)
 
 
+def build_heartbeat_message(all_statuses, raw):
+    """Weekly 'still alive' ping for quiet days.
+
+    Edge-triggered alerts mean silence on unchanged days — which is ambiguous:
+    all-quiet, or the job is broken? This compact weekly Telegram message removes
+    that ambiguity. If it stops arriving, something is broken (Action, yfinance,
+    or an expired secret). One block, once a week — low friction by design.
+    """
+    overall = raw.get("overall_level", "green")
+    icon = {
+        "red":   "🟢 KAUFSIGNAL",
+        "amber": "🟡 BEOBACHTEN",
+        "green": "⚪ ALLES GRÜN",
+    }.get(overall, "⚪ ALLES GRÜN")
+
+    def n(v, d=2):
+        return _de_num(v, d) if v is not None else "—"
+
+    lines = [
+        "💚 <b>QC-Monitor läuft</b> — wöchentlicher Statuscheck",
+        f"<b>{_de_date()}, {datetime.now():%H:%M}</b>",
+        "",
+        f"Gesamtampel: <b>{icon}</b>",
+        (f"VIX {n(raw.get('vix'), 1)} · Brent {n(raw.get('brent'), 1)} $ · "
+         f"US-10J {n(raw.get('us10y'), 2)} % · KRE {n(raw.get('kre_14d_pct'), 1)} % · "
+         f"QQQ {n(raw.get('qqq_52w_pct'), 1)} % · NVDA {n(raw.get('nvda_52w_pct'), 1)} %"),
+        "",
+        "Indikatoren werden werktäglich geprüft; Alarme kommen nur bei Ampel-Wechsel.",
+        "<i>Diese Nachricht kommt automatisch jeden Montag. Bleibt sie aus, ist etwas kaputt.</i>",
+    ]
+    return "\n".join(lines)
+
+
 def send_telegram(cfg, message):
     """Send message via Telegram bot. Returns True on success, False if not configured."""
     tg      = cfg.get("telegram", {})
@@ -1835,6 +1868,23 @@ def main():
     else:
         log.info("All indicators green -no alerts sent")
         print(f"[{datetime.now():%Y-%m-%d %H:%M}] All green. No alerts.")
+
+    # ── Weekly heartbeat ──────────────────────────────────────────────────────
+    # Prove the monitor is alive on quiet days. Only when no alert already went
+    # out (a real alert is itself proof of life) and only on the configured
+    # weekday (default Monday = 0). Telegram only — one low-friction ping.
+    hb_enabled = cfg.get("heartbeat_enabled", True)
+    hb_weekday = cfg.get("heartbeat_weekday", 0)   # 0 = Monday
+    if hb_enabled and not alert_sent and datetime.now().weekday() == hb_weekday:
+        try:
+            if send_telegram(cfg, build_heartbeat_message(all_statuses, raw)):
+                log.info("Heartbeat sent")
+                print(f"[{datetime.now():%Y-%m-%d %H:%M}] Heartbeat sent")
+            else:
+                log.info("Heartbeat skipped -Telegram not configured")
+        except Exception as exc:
+            log.warning(f"Heartbeat failed: {exc}")
+            print(f"Heartbeat error (non-fatal): {exc}")
 
     write_to_csv(raw, alert_sent)
     generate_status_html(all_statuses, raw)
