@@ -43,6 +43,8 @@ CSV_COLUMNS = [
     "nvda_price", "nvda_52w_pct", "nvda_level",
     "brent", "brent_high_level", "brent_low_level",
     "us10y", "us10y_level",
+    "move", "move_level",
+    "periph_spread", "periph_level",
     "hurricane_max_winds", "hurricane_level",
     "overall_level", "alert_sent",
 ]
@@ -210,6 +212,48 @@ INDICATORS = {
         "news_url": "https://news.google.com/search?q=US+Staatsanleihen+Rendite+Zinsanstieg&hl=de&gl=AT",
         "stocks": ["CINF", "CB", "TRV", "PGR", "USB", "MTB", "WFC", "ALV", "MUV2", "HNR1", "VIG", "EBS"],
     },
+    "MOVE": {
+        "ticker": "^MOVE",
+        "label": "MOVE-Index (Anleihe-Volatilität)",
+        "check": "above",
+        "amber": 110,
+        "red": 150,
+        "scenario": "Anleihemarkt-Stress -Frühwarnung für Fiskal-/Treasury-Schock",
+        "why_discount": (
+            "Der MOVE-Index ist der VIX für Anleihen: er misst die erwartete Schwankung "
+            "von US-Staatsanleihen. Springt er hoch, ist der Anleihemarkt verunsichert — "
+            "historisch der Frühindikator für einen Zins-/Haushaltsschock, der die Aktien-KGV "
+            "pauschal komprimiert. Steigt oft, bevor der VIX reagiert. Erzwungener Ausverkauf "
+            "folgt meist, wenn die Anleihevolatilität anhält."
+        ),
+        "news_url": "https://news.google.com/search?q=Anleihemarkt+Volatilität+Treasury+Stress&hl=de&gl=AT",
+        "stocks": ["CINF", "CB", "TRV", "PGR", "USB", "MTB", "WFC", "ALV", "MUV2", "HNR1", "VIG", "EBS"],
+    },
+}
+
+# ── Euro-periphery sovereign spread (ECB daily yield curve; not a yfinance ticker) ──
+# All-euro-area-bonds 10Y minus AAA-only 10Y, in basis points. The broad periphery
+# risk premium (Italy is the largest driver) — the leading indicator for every
+# European sovereign-stress event. Daily, free, no key. NOTE: this composite measure
+# runs NARROWER than the raw BTP-Bund spread quoted in the dashboard; thresholds below
+# are recalibrated for it and are provisional until back-tested against 2011/2018.
+PERIPHERY = {
+    "label": "Euro-Peripherie-Spread (10J, alle Bonds − AAA)",
+    "amber": 70,    # bp -European sovereign stress building
+    "red":   120,   # bp -fear mode; DAX quality on sale
+    "scenario": "Europäischer Staatsschuldenstress -DAX-Qualität wird breit ausverkauft",
+    "why_discount": (
+        "Jedes europäische Finanzstress-Ereignis der letzten 15 Jahre begann mit einem "
+        "Ausweiten der Peripherie-Spreads (Italien vs. Deutschland). Wirkt Italien instabil, "
+        "verkaufen Investoren europäische Aktien breit — auch Allianz, Munich Re, Hannover "
+        "Rück und Deutsche Börse, die mit italienischen Staatsanleihen nichts zu tun haben, "
+        "aber an derselben Börse mit denselben Investoren gehandelt werden."
+    ),
+    "news_url": "https://news.google.com/search?q=Italien+Anleihen+Spread+Europa+Staatsschulden&hl=de&gl=AT",
+    "stocks": ["ALV", "MUV2", "HNR1", "DB1"],
+    "ecb_url": "https://data-api.ecb.europa.eu/service/data/YC/",
+    "ecb_aaa": "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y",
+    "ecb_all": "B.U2.EUR.4F.G_N_C.SV_C_YM.SR_10Y",
 }
 
 HURRICANE_MONTHS = {6, 7, 8, 9, 10, 11}
@@ -222,6 +266,12 @@ NOAA_ACTIVE_STORMS_URL = "https://www.nhc.noaa.gov/activestorms.xml"
 # noise (and loses to the index); requiring >=3 panic indicators red at once lifted
 # 12-month returns from +15% to +30%. brent_low (oil-deescalation) never counts
 # toward a buy; an active major hurricane is a standalone buy signal by design.
+#
+# MOVE and PERIPHERY are deliberately NOT in this set yet: the >=3 rule was
+# calibrated on these 6 keys, and adding un-backtested indicators would silently
+# loosen the KAUFSIGNAL threshold. They run informationally (drive their own
+# amber/red status + a single amber lifts the overall to BEOBACHTEN), but don't
+# count toward the >=3 buy trigger until back-tested against 2011/2018/2020.
 BROAD_PANIC_KEYS    = {"VIX", "KRE", "QQQ", "NVDA", "BRENT_HIGH", "US10Y"}
 KAUFSIGNAL_MIN_REDS = 3
 
@@ -279,6 +329,33 @@ def get_current_and_history(closes, ticker):
     if series.empty:
         return None, None
     return float(series.iloc[-1]), series
+
+
+def fetch_periphery_spread():
+    """Euro-periphery 10Y sovereign spread in basis points (ECB daily yield curve).
+
+    All-euro-area-bonds 10Y minus AAA-only 10Y. Returns (spread_bp, all_pct, aaa_pct)
+    or (None, None, None) on failure. Free, no key. Data lags ~1 trading day.
+    """
+    base = PERIPHERY["ecb_url"]
+
+    def _last(key):
+        r = requests.get(base + key,
+                         params={"lastNObservations": 1, "format": "jsondata"},
+                         headers={"Accept": "application/json"}, timeout=20)
+        r.raise_for_status()
+        j = r.json()
+        obs = list(j["dataSets"][0]["series"].values())[0]["observations"]
+        return float(list(obs.values())[0][0])
+
+    try:
+        all_y = _last(PERIPHERY["ecb_all"])
+        aaa_y = _last(PERIPHERY["ecb_aaa"])
+        spread_bp = round((all_y - aaa_y) * 100, 1)
+        return spread_bp, round(all_y, 3), round(aaa_y, 3)
+    except Exception as exc:
+        log.warning(f"ECB periphery-spread fetch failed: {exc}")
+        return None, None, None
 
 
 def check_atlantic_hurricanes():
@@ -577,6 +654,8 @@ def evaluate(closes):
             raw["brent_low_level"] = level   # brent price already set by BRENT_HIGH
         elif key == "US10Y":
             raw["us10y"] = round(current, 2);  raw["us10y_level"] = level
+        elif key == "MOVE":
+            raw["move"] = round(current, 2);  raw["move_level"] = level
 
         status = {
             "key": key, "level": level, "label": ind["label"],
@@ -636,6 +715,34 @@ def evaluate(closes):
             })
         raw["hurricane_max_winds"] = 0
         raw["hurricane_level"]     = "green"
+
+    # ── Euro-periphery sovereign spread (ECB daily) ──────────────────────────
+    spread_bp, all_y, aaa_y = fetch_periphery_spread()
+    if spread_bp is not None:
+        p_amber, p_red = PERIPHERY["amber"], PERIPHERY["red"]
+        p_level = "red" if spread_bp >= p_red else ("amber" if spread_bp >= p_amber else "green")
+        p_compact = (f"{_de_num(spread_bp, 1)} bp (alle {_de_num(all_y, 2)} % − AAA "
+                     f"{_de_num(aaa_y, 2)} %) -Gelb ab {p_amber} bp, Rot ab {p_red} bp")
+        p_status = {
+            "key": "PERIPHERY", "level": p_level,
+            "label": PERIPHERY["label"],
+            "compact": p_compact,
+            "current": f"{_de_num(spread_bp, 1)} bp",
+            "threshold": f"Beobachten ab {p_amber} bp | Kaufsignal ab {p_red} bp",
+            "scenario": PERIPHERY["scenario"],
+            "why_discount": PERIPHERY["why_discount"],
+            "news_url": PERIPHERY["news_url"],
+            "stocks": PERIPHERY["stocks"],
+        }
+        all_statuses.append(p_status)
+        if p_level != "green":
+            alerts.append(p_status)
+        raw["periph_spread"] = spread_bp
+        raw["periph_level"]  = p_level
+        log.info(f"PERIPHERY: {spread_bp} bp → {p_level.upper()}")
+    else:
+        raw["periph_spread"] = None
+        raw["periph_level"]  = "green"   # unknown -don't fabricate stress
 
     raw["overall_level"] = signal_level(alerts)
 
@@ -1168,8 +1275,9 @@ def build_heartbeat_message(all_statuses, raw):
         "",
         f"Gesamtampel: <b>{icon}</b>",
         (f"VIX {n(raw.get('vix'), 1)} · Brent {n(raw.get('brent'), 1)} $ · "
-         f"US-10J {n(raw.get('us10y'), 2)} % · KRE {n(raw.get('kre_14d_pct'), 1)} % · "
-         f"QQQ {n(raw.get('qqq_52w_pct'), 1)} % · NVDA {n(raw.get('nvda_52w_pct'), 1)} %"),
+         f"US-10J {n(raw.get('us10y'), 2)} % · MOVE {n(raw.get('move'), 0)} · "
+         f"KRE {n(raw.get('kre_14d_pct'), 1)} % · QQQ {n(raw.get('qqq_52w_pct'), 1)} % · "
+         f"NVDA {n(raw.get('nvda_52w_pct'), 1)} % · Periph {n(raw.get('periph_spread'), 0)} bp"),
         "",
         "Indikatoren werden werktäglich geprüft; Alarme kommen nur bei Ampel-Wechsel.",
         "<i>Diese Nachricht kommt automatisch jeden Montag. Bleibt sie aus, ist etwas kaputt.</i>",
