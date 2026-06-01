@@ -1909,7 +1909,7 @@ def main():
         log.error("Config file missing")
         return
 
-    with open(CFG_PATH) as f:
+    with open(CFG_PATH, encoding="utf-8") as f:
         cfg = json.load(f)
 
     if cfg["email"]["app_password"] == "YOUR_GMAIL_APP_PASSWORD_HERE":
