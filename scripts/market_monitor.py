@@ -352,6 +352,60 @@ LEADING_INDICATORS = {
 CALIBRATED_LEADING = {"KREXLF"}
 
 
+# ── Krisen-Landkarte: live scenario status ───────────────────────────────────
+# Pure mapping/rendering layer over evaluate() + evaluate_leading() — no new fetch.
+# Bridges the static Krisen-Drehbücher (4 scenarios) to the live indicators, so the
+# Monday heartbeat + status page show WHICH scenario is heating up. Temperature:
+#   🔴 heiß    — a scenario PANIC indicator is red (price trigger firing → action, Teil 3)
+#   🟠 lauwarm — panic amber, OR a leading indicator red (stress building → homework)
+#   🟡 kühl    — a leading indicator amber (slight tension)
+#   ⚪ kalt    — all green
+SCENARIOS = [
+    {"id": "①", "icon": "🏦", "name": "CRE-Bankenkrise",
+     "panic": ["KRE"],                     "leading": ["HYOAS", "KREXLF"]},
+    {"id": "②", "icon": "🤖", "name": "KI-Blase",
+     "panic": ["QQQ", "NVDA"],             "leading": ["BREADTH"]},
+    {"id": "③", "icon": "🏛️", "name": "US-Fiskal/Zins-Schock",
+     "panic": ["US10Y", "MOVE"],           "leading": ["INFL5Y5Y", "STEEPEN", "TERMPREM", "DXYDIV"]},
+    {"id": "④", "icon": "🌀", "name": "Nat-Cat-/Öl-Schock",
+     "panic": ["BRENT_HIGH", "HURRICANE"], "leading": []},
+]
+
+# Short labels for the scenario-status drivers (kept compact for the heartbeat).
+SCEN_SHORT_LABEL = {
+    "KRE": "KRE", "QQQ": "QQQ", "NVDA": "NVDA", "US10Y": "US-10J", "MOVE": "MOVE",
+    "BRENT_HIGH": "Brent", "HURRICANE": "Hurrikan", "HYOAS": "HY-OAS",
+    "KREXLF": "KRE/XLF", "BREADTH": "Breite", "INFL5Y5Y": "5J/5J",
+    "STEEPEN": "Steepening", "TERMPREM": "Term-Prem", "DXYDIV": "DXY-Div",
+}
+SCEN_TEMP_ICON = {"kalt": "⚪", "kühl": "🟡", "lauwarm": "🟠", "heiß": "🔴"}
+
+
+def scenario_status(all_statuses, leading):
+    """Map the live indicator readings onto the 4 Krisen-Drehbücher scenarios.
+    Returns [{id, icon, name, temp, drivers}], temp ∈ kalt/kühl/lauwarm/heiß,
+    drivers = [(short_label, level), …] for that scenario's indicators."""
+    panic_lvl = {s["key"]: s["level"] for s in all_statuses}
+    lead_lvl  = {s["key"]: s["level"] for s in (leading or [])}
+    out = []
+    for sc in SCENARIOS:
+        p = [panic_lvl.get(k, "green") for k in sc["panic"]]
+        l = [lead_lvl.get(k, "green")  for k in sc["leading"]]
+        if "red" in p:
+            temp = "heiß"
+        elif "amber" in p or "red" in l:
+            temp = "lauwarm"
+        elif "amber" in l:
+            temp = "kühl"
+        else:
+            temp = "kalt"
+        drivers = [(SCEN_SHORT_LABEL.get(k, k), panic_lvl.get(k, "green")) for k in sc["panic"]]
+        drivers += [(SCEN_SHORT_LABEL.get(k, k), lead_lvl.get(k, "green")) for k in sc["leading"]]
+        out.append({"id": sc["id"], "icon": sc["icon"], "name": sc["name"],
+                    "temp": temp, "drivers": drivers})
+    return out
+
+
 # ── Aggregate buy-signal logic (calibrated on the 7-year backtest) ────────────
 # A KAUFSIGNAL means broad, indiscriminate selling — the moment quality stocks
 # get dumped for the wrong reasons. The backtest showed a single red indicator is
@@ -1566,7 +1620,7 @@ def _next_threshold_text(key, level):
     return f"→ {word} {prep} {_de_thr(val, unit)}"
 
 
-def build_heartbeat_message(all_statuses, raw, explanations=True, leading=None):
+def build_heartbeat_message(all_statuses, raw, explanations=True, leading=None, scenarios=None):
     """Weekly 'still alive' ping for quiet days.
 
     Edge-triggered alerts mean silence on unchanged days — which is ambiguous:
@@ -1618,6 +1672,17 @@ def build_heartbeat_message(all_statuses, raw, explanations=True, leading=None):
             lines.append(f"{icon} <b>{s['label']}</b>: {s.get('current', '—')}")
             if explanations and s.get("explain"):
                 lines.append(f"   <i>{s['explain']}</i>")
+
+    # ── Krisen-Landkarte: welches Szenario heizt sich auf ──────────────────────
+    if scenarios:
+        lines += ["", "🗺️ <b>Krisen-Landkarte — Live-Status</b> (welches Szenario heizt sich auf):"]
+        for sc in scenarios:
+            ti  = SCEN_TEMP_ICON.get(sc["temp"], "⚪")
+            drv = ", ".join(f"{lbl} {_LEVEL_ICON.get(lvl, '🟢')}" for lbl, lvl in sc["drivers"])
+            lines.append(f"{ti} <b>{sc['id']} {sc['icon']} {sc['name']}</b> — {sc['temp']} "
+                         f"<i>({drv})</i>")
+        lines.append("   <i>kalt → kühl → lauwarm → heiß; heiß = Preis-Trigger feuert "
+                     "(Handlungszone). Details je Szenario: Krisen-Drehbücher.</i>")
 
     lines += [
         "",
@@ -1901,7 +1966,7 @@ def check_and_welcome_new_subscribers(cfg):
 
 # ── Status page generator ─────────────────────────────────────────────────────
 
-def generate_status_html(all_statuses, raw, leading=None):
+def generate_status_html(all_statuses, raw, leading=None, scenarios=None):
     """Rewrite website/status.html with today's indicator readings. Called on every run."""
     import html as _h
 
@@ -1979,6 +2044,40 @@ def generate_status_html(all_statuses, raw, leading=None):
             'sondern zeigen, welches Krisen-Szenario sich aufheizt. Schwellen sind vorläufig.</p>'
             '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden">'
             f'{lead_rows}'
+            '</div></div></section>'
+        )
+
+    # ── Krisen-Landkarte: live scenario status ────────────────────────────────
+    scen_section = ""
+    if scenarios:
+        TEMP_BG = {"kalt": "#f3f4f6", "kühl": "#fef9c3", "lauwarm": "#ffedd5", "heiß": "#fee2e2"}
+        TEMP_BD = {"kalt": "#e5e7eb", "kühl": "#fde68a", "lauwarm": "#fed7aa", "heiß": "#fecaca"}
+        TEMP_TX = {"kalt": "#6b7280", "kühl": "#92400e", "lauwarm": "#9a3412", "heiß": "#991b1b"}
+        LVL_DOT = {"green": "🟢", "amber": "🟡", "red": "🔴"}
+        scen_rows = ""
+        for sc in scenarios:
+            t   = sc["temp"]
+            drv = ", ".join(f"{_h.escape(lbl)} {LVL_DOT.get(lvl, '🟢')}" for lbl, lvl in sc["drivers"])
+            scen_rows += (
+                f'<div style="display:flex;align-items:center;gap:14px;padding:12px 18px;'
+                f'background:{TEMP_BG.get(t, "#f3f4f6")};border-bottom:1px solid {TEMP_BD.get(t, "#e5e7eb")}">'
+                f'<div style="font-weight:700;font-size:12px;letter-spacing:.04em;'
+                f'color:{TEMP_TX.get(t, "#6b7280")};min-width:72px;text-transform:uppercase">{_h.escape(t)}</div>'
+                f'<div style="flex:1">'
+                f'<div style="font-weight:600;font-size:14px;color:#111827">{sc["id"]} {sc["icon"]} {_h.escape(sc["name"])}</div>'
+                f'<div style="font-size:12px;color:#4b5563;margin-top:2px">{drv}</div>'
+                f'</div></div>\n'
+            )
+        scen_section = (
+            '<section style="padding:40px 0 8px">'
+            '<div style="max-width:780px;margin:0 auto;padding:0 24px">'
+            '<h2 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:8px">Krisen-Landkarte '
+            '<span style="font-size:14px;font-weight:600;color:#9ca3af">(welches Szenario heizt sich auf)</span></h2>'
+            '<p style="font-size:15px;color:#6b7280;margin-bottom:20px">'
+            'Aktuelle Indikator-Werte, gemappt auf die vier Krisen-Szenarien. '
+            '<strong>kalt → kühl → lauwarm → heiß</strong>; heiß = Preis-Trigger feuert (Handlungszone).</p>'
+            '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden">'
+            f'{scen_rows}'
             '</div></div></section>'
         )
 
@@ -2068,6 +2167,8 @@ def generate_status_html(all_statuses, raw, leading=None):
     <div style="font-size:13px;color:#9ca3af;margin-top:4px">Automatische Aktualisierung täglich</div>
   </div>
 </div>
+
+{scen_section}
 
 <section style="padding:48px 0">
   <div style="max-width:780px;margin:0 auto;padding:0 24px">
@@ -2367,6 +2468,9 @@ def main():
         log.warning(f"Leading-indicator evaluation failed (non-fatal): {exc}")
         leading, raw_leading = [], {}
 
+    # Krisen-Landkarte: map live readings → the 4 scenarios (pure mapping, no fetch)
+    scen = scenario_status(all_statuses, leading)
+
     # Edge-triggered: notify only when the signal level CHANGES vs the last run
     # (the previous state is read from the CSV). This stops the daily repeat-pings
     # when nothing has changed — silence means "no change", which is the design.
@@ -2433,7 +2537,7 @@ def main():
     hb_explain = cfg.get("heartbeat_explanations", True)  # per-indicator explainers
     if hb_enabled and not alert_sent and datetime.now().weekday() == hb_weekday:
         try:
-            if send_telegram(cfg, build_heartbeat_message(all_statuses, raw, hb_explain, leading)):
+            if send_telegram(cfg, build_heartbeat_message(all_statuses, raw, hb_explain, leading, scen)):
                 log.info("Heartbeat sent")
                 print(f"[{datetime.now():%Y-%m-%d %H:%M}] Heartbeat sent")
             else:
@@ -2444,7 +2548,7 @@ def main():
 
     write_to_csv(raw, alert_sent)
     write_leading_csv(raw_leading)
-    generate_status_html(all_statuses, raw, leading)
+    generate_status_html(all_statuses, raw, leading, scen)
 
 
 if __name__ == "__main__":
