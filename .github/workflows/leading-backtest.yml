@@ -1,0 +1,49 @@
+name: Leading-indicator backtest (one-off)
+
+# Calibrates the Vor-Indikatoren (leading layer) against the catalogued crises.
+# Manual only — run it once from the Actions tab whenever thresholds need
+# (re)calibrating. Unlike the dev sandbox, the GitHub runner reaches FRED with
+# full history, so the FRED-based indicators (HY-OAS, 5y5y, 10Y-2Y, term premium)
+# actually get data here. No secrets needed — it only fetches FRED + yfinance and
+# imports market_monitor.py for the production thresholds.
+
+on:
+  workflow_dispatch:          # manual "Run workflow" button only
+
+permissions:
+  contents: write             # lets the job commit the backtest outputs
+
+jobs:
+  backtest-leading:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install yfinance requests pandas numpy
+
+      - name: Run leading-indicator backtest
+        run: python scripts/backtest/backtest_leading.py
+
+      - name: Upload backtest summary as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leading-backtest-results
+          path: |
+            backtest/data/leading_backtest_summary.txt
+            backtest/data/leading_backtest_history.csv
+          if-no-files-found: warn
+
+      - name: Commit backtest outputs
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f backtest/data/leading_backtest_summary.txt backtest/data/leading_backtest_history.csv 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "chore: leading-indicator backtest results [skip ci]"
+          git push

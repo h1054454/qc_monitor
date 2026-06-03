@@ -281,8 +281,14 @@ NOAA_ACTIVE_STORMS_URL = "https://www.nhc.noaa.gov/activestorms.xml"
 # heating up so you do the right homework early. They surface only in the weekly
 # heartbeat + on the status page, and log to their own data/leading_history.csv.
 #
-# THRESHOLDS ARE PROVISIONAL — not yet back-tested like the 6 panic keys. Treat the
-# green/amber/red here as "ruhig / erhöht / Stress-Aufbau", a direction, not a trigger.
+# CALIBRATION (scripts/backtest/backtest_leading.py, metric = lead-time + false-alarm
+# rate, NOT buy-payoff). Treat green/amber/red as "ruhig / erhöht / Stress-Aufbau", a
+# direction, not a trigger.
+#   • KREXLF — BACK-TESTED 2026-06-03 (yfinance 2006→26): -5/-10 confirmed. Red -10
+#     catches GFC-2009, COVID, SVB-2023, 2025-tariff with 0 false alarms (sweep knee).
+#   • HYOAS / INFL5Y5Y / STEEPEN / TERMPREM — STILL PROVISIONAL: need a re-run where
+#     full FRED history is reachable (the dev sandbox only got a ~3y window / timeouts).
+#   • BREADTH / DXYDIV — PROVISIONAL (not yet swept).
 FRED_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 
 LEADING_INDICATORS = {
@@ -297,6 +303,7 @@ LEADING_INDICATORS = {
     "KREXLF": {
         "kind": "ratio_below_avg", "num": "KRE", "den": "XLF", "window": 60,
         "label": "KRE/XLF (Regionalbanken relativ)", "unit": "%", "decimals": 1,
+        # Back-tested 2026-06-03: -5/-10 confirmed (red -10 = 4/4 bank/broad crises, 0 false alarms).
         "amber": -5.0, "red": -10.0, "check": "below", "lane": "Kredit / Banken (CRE)",
         "explain": ("Regionalbanken gegen den breiten Finanzsektor. Fällt das Verhältnis = "
                     "sektorspezifischer CRE-Stress baut sich auf, bevor KRE absolut −15 % macht."),
@@ -336,6 +343,13 @@ LEADING_INDICATORS = {
                     "(nicht Wachstums-)Signal — die Alarm-Signatur einer beginnenden Fiskalkrise."),
     },
 }
+
+# Only these leading indicators are back-tested enough to drive the "Vorwarnung"
+# Telegram ping (a fresh crossing to red → one edge-triggered notification, clearly
+# labelled "kein Kaufsignal"). The rest stay display-only (heartbeat + status page)
+# until calibrated. Add a key here once backtest_leading.py validates its thresholds.
+# (KREXLF back-tested 2026-06-03: -5/-10, 0 false alarms across the catalogued crises.)
+CALIBRATED_LEADING = {"KREXLF"}
 
 
 # ── Aggregate buy-signal logic (calibrated on the 7-year backtest) ────────────
@@ -997,6 +1011,23 @@ def write_to_csv(raw, alert_sent: bool):
     log.info(f"CSV row written: {raw['date']} | overall={raw['overall_level']}")
 
 
+def read_last_leading_levels():
+    """Per-indicator level from the most recent leading_history.csv row, for
+    edge-triggering the Vorwarnung (notify only on a fresh crossing to red).
+    Returns {'lead_<key>_level': 'green'|'amber'|'red', ...} or {}."""
+    import csv
+    if not LEADING_CSV_PATH.exists():
+        return {}
+    try:
+        with open(LEADING_CSV_PATH, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        if not rows:
+            return {}
+        return {k: v for k, v in rows[-1].items() if k.endswith("_level")}
+    except Exception:
+        return {}
+
+
 def write_leading_csv(raw_leading):
     """Append one row to leading_history.csv (separate from the panic-indicator CSV
     so adding/removing a Vor-Indikator never disturbs the back-tested main history)."""
@@ -1596,6 +1627,37 @@ def build_heartbeat_message(all_statuses, raw, explanations=True, leading=None):
         "wann sich ein Discount-Fenster nähert.",
         "",
         "<i>Kommt automatisch jeden Montag. Bleibt die Nachricht aus, ist etwas kaputt.</i>",
+    ]
+    return "\n".join(lines)
+
+
+def build_leading_warning_message(newly_red):
+    """Telegram 'Vorwarnung' — fires when a CALIBRATED leading indicator first crosses
+    to red. Deliberately NOT a KAUFSIGNAL: clearly labelled, separate wording, says
+    'prepare the homework', not 'buy'. The discount only exists once the price falls."""
+    import html as html_lib
+    lines = [
+        "📡 <b>VORWARNUNG — kein Kaufsignal</b>",
+        f"<b>{_de_date()}, {datetime.now():%H:%M}</b>",
+        "",
+        "Ein backtesteter <b>Vor-Indikator</b> ist auf <b>Stress-Aufbau (rot)</b> gesprungen. "
+        "Das ist <b>kein</b> Kaufsignal — der Discount entsteht erst, wenn der <i>Preis</i> fällt. "
+        "Es heißt: jetzt die Hausaufgabe für das betroffene Szenario vorbereiten.",
+        "",
+    ]
+    for s in newly_red:
+        lines.append(f"🔴 <b>{html_lib.escape(s['label'])}</b> "
+                     f"<i>({html_lib.escape(s.get('lane', ''))})</i>")
+        lines.append(f"   {html_lib.escape(s.get('current', ''))}")
+        if s.get("explain"):
+            lines.append(f"   <i>{html_lib.escape(s['explain'])}</i>")
+        lines.append("")
+    lines += [
+        "<b>Was tun:</b> Zielpreise der betroffenen Watchlist-Namen scharfstellen, "
+        "Kapital-/CRE-Quoten prüfen. <b>Nicht kaufen</b>, bis der Preis-Trigger "
+        "(KRE / QQQ / US-10J …) fällt und das echte KAUFSIGNAL (≥3 rot) kommt.",
+        "",
+        "<i>Vor-Indikatoren zählen nie zum ≥3-Kaufsignal — sie warnen nur früher.</i>",
     ]
     return "\n".join(lines)
 
@@ -2298,6 +2360,7 @@ def main():
 
     # Vor-Indikatoren (Stress-Aufbau): leading, informational only. Computed
     # separately so they can NEVER affect alerts / overall_level / KAUFSIGNAL.
+    prev_leading = read_last_leading_levels()   # read BEFORE we append today's row
     try:
         leading, raw_leading = evaluate_leading()
     except Exception as exc:
@@ -2342,6 +2405,24 @@ def main():
     else:
         log.info("All indicators green -no alerts sent")
         print(f"[{datetime.now():%Y-%m-%d %H:%M}] All green. No alerts.")
+
+    # ── Vor-Indikator-Vorwarnung ──────────────────────────────────────────────
+    # Edge-triggered, Telegram-only, CALIBRATED indicators only. Fires when a
+    # back-tested leading indicator FIRST crosses to red (vs the last run). It is
+    # NOT a KAUFSIGNAL and is fully independent of the alert logic above — it never
+    # touches overall_level / the ≥3 rule. The discount only exists once the price
+    # falls, so this says "prepare the homework", not "buy".
+    newly_red = [s for s in leading
+                 if s["key"] in CALIBRATED_LEADING and s["level"] == "red"
+                 and prev_leading.get(f"lead_{s['key'].lower()}_level") != "red"]
+    if newly_red:
+        try:
+            if send_telegram(cfg, build_leading_warning_message(newly_red)):
+                log.info(f"Vorwarnung sent: {[s['key'] for s in newly_red]}")
+                print(f"[{datetime.now():%Y-%m-%d %H:%M}] Vorwarnung sent "
+                      f"({', '.join(s['key'] for s in newly_red)})")
+        except Exception as exc:
+            log.warning(f"Vorwarnung failed (non-fatal): {exc}")
 
     # ── Weekly heartbeat ──────────────────────────────────────────────────────
     # Prove the monitor is alive on quiet days. Only when no alert already went

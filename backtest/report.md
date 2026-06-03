@@ -182,3 +182,32 @@ the 2011 EU-debt stress, MOVE red on the COVID bond shock; both correctly muted 
   but a richer multi-crisis sample is needed before letting them count toward a buy
   trigger. Periphery is the stronger candidate (clean 2011 red, 44d early); MOVE is a
   confirmer at best.
+
+---
+
+## Addendum 2026-06-03 — Vor-Indikatoren (leading layer)
+
+A separate **leading-indicator layer** was added (`LEADING_INDICATORS` + `evaluate_leading()`),
+purely informational — it never enters `alerts` / `signal_level()` / the ≥3 KAUFSIGNAL.
+Calibration uses a *different metric* than the panic backtest: not buy-payoff but
+**lead-time + false-alarm rate** (`scripts/backtest/backtest_leading.py`). Details +
+open items: `backtest/notes/leading-calibration.md`.
+
+**KREXLF (KRE/XLF, regional banks relative) — back-tested & validated, thresholds −5/−10:**
+
+| Crisis | KRE/XLF red | Lead to trough | vs KRE |
+|---|---|---|---|
+| GFC 2009 (banks) | RED 2009-04-14 | 70d before | led 43d |
+| COVID 2020 | RED 2020-03-09 | 14d before | lagged 6d |
+| 2023 banks (SVB) | RED 2023-03-13 | 52d before | lagged 4d |
+| 2025 tariff | RED 2025-04-03 | 5d before | led 8d |
+
+Whole-history false alarms: **0** (5 red episodes, all 5 ahead of a crisis). Sweep: red
+−6 → 8/12 crises but 9 false alarms; **red −10 → 4/12, 0 false alarms** (clean knee).
+Reads early in *slow* bank-specific stress (2009/2025 lead KRE), coincident in *fast*
+everything-crashes (COVID/SVB lag KRE slightly) — exactly the expected behaviour for a
+*relative* measure.
+
+**Still open (FRED unreachable in the dev sandbox — re-run where full FRED history is
+available, e.g. the Actions runner):** HYOAS, INFL5Y5Y, STEEPEN, TERMPREM (FRED-based),
+plus BREADTH / DXYDIV (not yet swept). Thresholds for these remain **provisional**.
