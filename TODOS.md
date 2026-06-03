@@ -22,9 +22,9 @@ re-validation (a genuinely impaired name would still be flagged "cheap"), bus-fa
 
 ---
 
-## Next up — accepted scope (P1)
+## Shipped 2026-06-03 (was: accepted scope P1)
 
-### T1 — Enforce tranche staggering (stateless-inferred)
+### T1 — Enforce tranche staggering (stateless-inferred) — ✅ SHIPPED 2026-06-03
 - **What:** On a KAUFSIGNAL, the alert lays out the staged tranche plan and infers which
   tranche is appropriate from the *current drawdown depth* — no per-tranche state tracked.
 - **Why:** The backtest's #1 lesson — in a long meltdown the signal fires repeatedly and
@@ -41,7 +41,7 @@ re-validation (a genuinely impaired name would still be flagged "cheap"), bus-fa
   (the KAUFSIGNAL alert path).
 - **Effort:** human ~1 day / CC ~20 min. **Priority:** P1. **Depends on:** none.
 
-### T2 — Signal → Playbook → target-price coupling (embedded)
+### T2 — Signal → Playbook → target-price coupling (embedded) — ✅ SHIPPED 2026-06-03
 - **What:** The KAUFSIGNAL alert names the relevant Krisen-Drehbuch scenario and shows the
   current target prices for the affected names.
 - **Why:** Closes the gap between "signal fired" and "what *exactly* do I do." The playbook

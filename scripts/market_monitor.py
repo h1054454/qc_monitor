@@ -63,6 +63,7 @@ log = logging.getLogger(__name__)
 
 # ── Watchlist — loaded from config/watchlist.json ────────────────────────────
 WATCHLIST_PATH = BASE_DIR / "config" / "watchlist.json"
+WATCHLIST_LAST_UPDATED = ""   # Stand-date of the watchlist (incl. target prices)
 
 def _load_watchlist():
     """Read watchlist.json and derive BUY_TARGETS, TICKER_NAMES, TICKER_YF, TICKER_INDEX."""
@@ -74,12 +75,15 @@ def _load_watchlist():
             data = json.load(f)
         stocks = data.get("stocks", {})
         buy_targets  = {t: {"name": s["name"], "curr": s["kgv_current"],
-                             "amber": s["kgv_amber"], "red": s["kgv_red"]}
+                             "amber": s["kgv_amber"], "red": s["kgv_red"],
+                             "target": s.get("target_price")}
                         for t, s in stocks.items()}
         ticker_names = {t: s["name"]       for t, s in stocks.items()}
         ticker_yf    = {t: s["yf_symbol"]  for t, s in stocks.items()}
         ticker_index = {t: s["index"]      for t, s in stocks.items()}
         session = data.get("session", "unknown")
+        global WATCHLIST_LAST_UPDATED
+        WATCHLIST_LAST_UPDATED = data.get("last_updated", "")
         logging.info(f"Watchlist loaded from {session}: {len(stocks)} stocks")
         return buy_targets, ticker_names, ticker_yf, ticker_index
     except Exception as exc:
@@ -434,6 +438,53 @@ def signal_level(alerts):
     if broad_reds >= KAUFSIGNAL_MIN_REDS or hurricane_red:
         return "red"
     return "amber" if alerts else "green"
+
+
+# ── Tranche staggering (T1) + Playbook coupling (T2) ─────────────────────────
+# Stateless tranche hint for a KAUFSIGNAL: infer depth from the deepest *broad*
+# drop indicator (QQQ + KRE; NVDA excluded — single-stock volatile, would overstate
+# depth). No per-tranche state, no user input. Callers gate on signal_level == "red".
+TRANCHE_DEPTH_KEYS = {"QQQ", "KRE"}
+
+
+def tranche_guidance(alerts):
+    """Return (n, band, line) for the staged-buy hint. Infers the tranche from the
+    deepest broad drawdown among the alerts; never tracks what was actually deployed."""
+    depths = [a["pct"] for a in alerts
+              if a.get("key") in TRANCHE_DEPTH_KEYS and a["level"] == "red"
+              and a.get("pct") is not None]
+    depth = min(depths) if depths else None
+    if depth is None:
+        return 1, "Tranche 1", "erste Tranche-Zone"
+    if depth <= -35:   band, n = "Tranche 3 / Reserve", 3
+    elif depth <= -25: band, n = "Tranche 2", 2
+    else:              band, n = "Tranche 1", 1
+    line = f"Markt {('%.0f' % depth).replace('-', '−')} % vom Hoch → {band}-Territorium"
+    return n, band, line
+
+
+# Indicator key → (Drehbuch number, title). VIX = broad, no single Drehbuch.
+SCENARIO_DREHBUCH = {
+    "KRE": ("02", "CRE-Bankenkrise"),
+    "QQQ": ("01", "KI-Blase"), "NVDA": ("01", "KI-Blase"),
+    "US10Y": ("03", "US-Fiskal/Zins-Schock"), "MOVE": ("03", "US-Fiskal/Zins-Schock"),
+    "BRENT_HIGH": ("04", "Nat-Cat-/Öl-Schock"), "HURRICANE": ("04", "Nat-Cat-/Öl-Schock"),
+}
+
+
+def triggered_drehbuecher(alerts):
+    """Ordered, deduped [(num, title)] for the scenarios this alert set triggers."""
+    seen, out = set(), []
+    for a in alerts:
+        hit = SCENARIO_DREHBUCH.get(a.get("key"))
+        if hit and hit[0] not in seen:
+            seen.add(hit[0]); out.append(hit)
+    return sorted(out)
+
+
+def _target_ccy(ticker):
+    """Currency symbol for a watchlist ticker (€ for DAX/ATX, else $)."""
+    return "€" if TICKER_INDEX.get(ticker) in ("DAX", "ATX") else "$"
 
 
 # ── Data fetching ─────────────────────────────────────────────────────────────
@@ -950,6 +1001,8 @@ def evaluate(closes):
             "news_url": ind.get("news_url", ""),
             "stocks": ind["stocks"],
         }
+        if pct_change is not None:
+            status["pct"] = round(pct_change, 1)   # drawdown (negative) — for tranche depth
         all_statuses.append(status)
         # brent_low (oil-deescalation) is informational only — it stays on the
         # status page but never drives a notification (excluded from alerts).
@@ -1246,6 +1299,7 @@ def buy_target_rows(stock_tickers):
         if t not in BUY_TARGETS:
             continue
         b = BUY_TARGETS[t]
+        target_txt = f"{b['target']:.0f} {_target_ccy(t)}" if b.get("target") else "—"
         rows += (
             f"<tr>"
             f"<td style='padding:4px 10px;font-weight:bold'>{t}</td>"
@@ -1253,6 +1307,7 @@ def buy_target_rows(stock_tickers):
             f"<td style='padding:4px 10px;text-align:center'>{b['curr']:.2f}x</td>"
             f"<td style='padding:4px 10px;text-align:center;color:#b45309'>{b['amber']:.1f}x</td>"
             f"<td style='padding:4px 10px;text-align:center;color:#15803d;font-weight:bold'>{b['red']:.1f}x</td>"
+            f"<td style='padding:4px 10px;text-align:center;color:#15803d'>{target_txt}</td>"
             f"</tr>"
         )
     return rows
@@ -1375,6 +1430,13 @@ def build_html(alerts, closes, watchlist):
                     f'</div>'
                 )
 
+        dbs = triggered_drehbuecher(alerts)
+        drehbuch_html = (
+            '<div style="font-size:12px;color:#6b7280;margin-bottom:12px">'
+            '📘 Betroffene Krisen-Drehbücher: ' + ", ".join(f"{n} {t}" for n, t in dbs)
+            + '</div>'
+        ) if dbs else ""
+        stand = WATCHLIST_LAST_UPDATED or "—"
         stocks_section = f"""
         <div style="background:#fff;border-radius:8px;margin:0 0 16px;
                     border-left:5px solid {worst_c};box-shadow:0 1px 4px rgba(0,0,0,.07)">
@@ -1383,6 +1445,7 @@ def build_html(alerts, closes, watchlist):
                          text-transform:uppercase;letter-spacing:.07em">Aktuell günstig</span>
           </div>
           <div class="card-pad" style="padding:16px 18px">
+            {drehbuch_html}
             <div style="font-size:13px;color:#374151;margin-bottom:14px;line-height:2">
               {stock_lines}
             </div>
@@ -1396,10 +1459,14 @@ def build_html(alerts, closes, watchlist):
                     <th style="padding:8px 10px;text-align:center;font-weight:600">Aktuelles KGV</th>
                     <th style="padding:8px 10px;text-align:center;font-weight:600">Beobachten</th>
                     <th style="padding:8px 10px;text-align:center;font-weight:600">Kaufsignal</th>
+                    <th style="padding:8px 10px;text-align:center;font-weight:600">Zielpreis</th>
                   </tr>
                 </thead>
                 <tbody>{agg_rows}</tbody>
               </table>
+            </div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:8px">
+              Zielpreise Stand {stand} - am tatsächlichen KGV prüfen.
             </div>
           </div>
         </div>
@@ -1423,6 +1490,23 @@ def build_html(alerts, closes, watchlist):
       </p>
     </div>
     """
+
+    # Tranche staggering (T1) — only on a KAUFSIGNAL
+    tranche_html = ""
+    if worst == "red":
+        _tn, _tband, _tline = tranche_guidance(alerts)
+        tranche_html = f"""
+        <div style="background:#fff;border-radius:8px;margin:0 0 16px;border-left:5px solid {header_color};
+                    box-shadow:0 1px 4px rgba(0,0,0,.07);padding:16px 18px">
+          <div style="font-size:13px;font-weight:700;color:#374151;text-transform:uppercase;
+                      letter-spacing:.05em;margin-bottom:8px">📉 Tranchen-Plan</div>
+          <div style="font-size:14px;color:#111827;font-weight:600;margin-bottom:6px">{_tline}</div>
+          <div style="font-size:13px;color:#374151;margin-bottom:6px">
+            25 % bei −15 % · 25 % bei −25 % · 25 % bei −35 % · 25 % Reserve</div>
+          <div style="font-size:13px;color:#6b7280">
+            Gestaffelt, nie all-in - die tiefere Tranche zahlt am besten (Backtest 2008).</div>
+        </div>
+        """
 
     html = f"""<!DOCTYPE html>
 <html lang="de">
@@ -1475,6 +1559,11 @@ def build_html(alerts, closes, watchlist):
   <!-- Indicator cards (compact, no stocks) -->
   <div style="padding:0 20px">
     {indicator_cards}
+  </div>
+
+  <!-- Tranche plan (KAUFSIGNAL only) -->
+  <div style="padding:0 20px">
+    {tranche_html}
   </div>
 
   <!-- Aggregated stocks watchlist -->
@@ -1552,6 +1641,31 @@ def build_telegram_message(alerts, all_statuses):
 
         if news_url:
             lines.append(f'   <a href="{html_lib.escape(news_url)}">→ Aktuelle Nachrichten</a>')
+        lines.append("")
+
+    # ── Tranchen-Plan + Playbook-Kopplung (KAUFSIGNAL only) ───────────────────
+    if worst_level == "red":
+        _tn, _tband, _tline = tranche_guidance(alerts)
+        lines.append(f"📉 <b>Tranchen-Plan</b>: {html_lib.escape(_tline)}")
+        lines.append("   25 % bei −15 % · 25 % bei −25 % · 25 % bei −35 % · 25 % Reserve")
+        lines.append("   Gestaffelt, nie all-in - die tiefere Tranche zahlt am besten (Backtest 2008).")
+        dbs = triggered_drehbuecher(alerts)
+        if dbs:
+            lines.append("📘 Betroffene Drehbücher: "
+                         + ", ".join(f"{n} {html_lib.escape(t)}" for n, t in dbs))
+        seen_t: set = set()
+        tparts: list = []
+        for a in alerts:
+            for t in a.get("stocks", []):
+                if t in seen_t:
+                    continue
+                seen_t.add(t)
+                tgt = BUY_TARGETS.get(t, {}).get("target")
+                if tgt:
+                    tparts.append(f"{html_lib.escape(TICKER_NAMES.get(t, t))} ~{tgt:.0f} {_target_ccy(t)}")
+        if tparts:
+            lines.append("🎯 Zielpreise: " + ", ".join(tparts)
+                         + f" (Stand {WATCHLIST_LAST_UPDATED or '—'}, am KGV prüfen)")
         lines.append("")
 
     # ── Normal indicators: compact single lines ───────────────────────────────
