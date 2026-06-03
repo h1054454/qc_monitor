@@ -31,6 +31,7 @@ BASE_DIR             = Path(__file__).parent.parent        # QC_Monitor/
 CFG_PATH             = BASE_DIR / "config" / "monitor_config.json"
 LOG_PATH             = BASE_DIR / "logs"   / "monitor_log.txt"
 CSV_PATH             = BASE_DIR / "data"   / "indicator_history.csv"
+LEADING_CSV_PATH     = BASE_DIR / "data"   / "leading_history.csv"
 SUBSCRIBERS_PATH     = BASE_DIR / "config" / "known_subscribers.json"
 STATUS_PATH          = BASE_DIR / "docs"    / "status.html"
 MARKET_ANALYSIS_DIR  = BASE_DIR.parent / "market-analysis"   # TOOLS/market-analysis/
@@ -268,6 +269,75 @@ HURRICANE_MONTHS = {6, 7, 8, 9, 10, 11}
 NOAA_ACTIVE_STORMS_URL = "https://www.nhc.noaa.gov/activestorms.xml"
 
 
+# ── Vor-Indikatoren (leading stress indicators) ──────────────────────────────
+# These measure stress BUILDING UP — the snowpack before the avalanche — not the
+# avalanche itself. The panic indicators above (KRE, QQQ, MOVE …) are *coincident*:
+# they fire once the market is already selling. These run *ahead* of that.
+#
+# DESIGN — "Aufmerksamkeit, nicht Handlung": they are PURELY INFORMATIONAL. They
+# NEVER enter `alerts`, NEVER touch signal_level()/the >=3 KAUFSIGNAL, NEVER fire a
+# notification on their own. The discount only exists once the *price* has fallen,
+# so a leading indicator never tells you to buy — it tells you which scenario is
+# heating up so you do the right homework early. They surface only in the weekly
+# heartbeat + on the status page, and log to their own data/leading_history.csv.
+#
+# THRESHOLDS ARE PROVISIONAL — not yet back-tested like the 6 panic keys. Treat the
+# green/amber/red here as "ruhig / erhöht / Stress-Aufbau", a direction, not a trigger.
+FRED_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+
+LEADING_INDICATORS = {
+    "HYOAS": {
+        "kind": "fred_level", "fred_id": "BAMLH0A0HYM2",
+        "label": "High-Yield-Kreditspread (OAS)", "unit": " %", "decimals": 2,
+        "amber": 4.5, "red": 6.0, "check": "above", "lane": "Kredit / Banken (CRE)",
+        "explain": ("Risikoaufschlag für Ramsch-Anleihen. Steigt = der Kreditmarkt preist "
+                    "Ausfälle ein — Vorlauf vor CRE-/Private-Credit-Stress, lange bevor der "
+                    "Aktien-KRE absolut bricht."),
+    },
+    "KREXLF": {
+        "kind": "ratio_below_avg", "num": "KRE", "den": "XLF", "window": 60,
+        "label": "KRE/XLF (Regionalbanken relativ)", "unit": "%", "decimals": 1,
+        "amber": -5.0, "red": -10.0, "check": "below", "lane": "Kredit / Banken (CRE)",
+        "explain": ("Regionalbanken gegen den breiten Finanzsektor. Fällt das Verhältnis = "
+                    "sektorspezifischer CRE-Stress baut sich auf, bevor KRE absolut −15 % macht."),
+    },
+    "BREADTH": {
+        "kind": "ratio_below_avg", "num": "RSP", "den": "SPY", "window": 60,
+        "label": "Marktbreite (RSP/SPY, Equal vs Cap)", "unit": "%", "decimals": 1,
+        "amber": -3.0, "red": -6.0, "check": "below", "lane": "KI / Konzentration",
+        "explain": ("Gleichgewichteter gegen größengewichteten S&P 500. Fällt = die Rally "
+                    "trägt nur noch die KI-Riesen — klassischer Spät-Blasen-Tell."),
+    },
+    "TERMPREM": {
+        "kind": "fred_level", "fred_id": "THREEFYTP10",
+        "label": "Term-Premium 10J (ACM-Modell)", "unit": " %", "decimals": 2,
+        "amber": 0.5, "red": 1.0, "check": "above", "lane": "Fiskal / Zins",
+        "explain": ("Risikoprämie für lange US-Laufzeiten. Steigt = der Anleihemarkt verlangt "
+                    "einen Fiskal-Aufschlag — Vorlauf vor dem finalen Rendite-Ausbruch."),
+    },
+    "INFL5Y5Y": {
+        "kind": "fred_level", "fred_id": "T5YIFR",
+        "label": "5J/5J-Forward-Inflationserwartung", "unit": " %", "decimals": 2,
+        "amber": 2.6, "red": 3.0, "check": "above", "lane": "Fiskal / Zins",
+        "explain": ("Markterwartete Inflation in 5–10 Jahren. >3 % = Erwartungen entankern "
+                    "(Fed-Glaubwürdigkeit) — der gefährliche Treiber steigender Langfristzinsen."),
+    },
+    "STEEPEN": {
+        "kind": "fred_change", "fred_id": "T10Y2Y", "window": 21,
+        "label": "Bear-Steepening (10J−2J, Δ 1 Monat)", "unit": " bp", "decimals": 0,
+        "amber": 25, "red": 50, "check": "above", "lane": "Fiskal / Zins",
+        "explain": ("Tempo der Kurven-Versteilung. Schnelle Versteilung am langen Ende = "
+                    "Fiskal-Signatur (anders als eine wachstumsgetriebene Bewegung)."),
+    },
+    "DXYDIV": {
+        "kind": "divergence_dxy", "dxy": "DX-Y.NYB", "yield_ticker": "^TNX", "window": 20,
+        "label": "Dollar-Renditen-Divergenz (DXY ↓ & 10J ↑)", "lane": "Fiskal / Zins",
+        "explain": ("Fällt der Dollar, WÄHREND die Renditen steigen, ist das ein Vertrauens- "
+                    "(nicht Wachstums-)Signal — die Alarm-Signatur einer beginnenden Fiskalkrise."),
+    },
+}
+
+
 # ── Aggregate buy-signal logic (calibrated on the 7-year backtest) ────────────
 # A KAUFSIGNAL means broad, indiscriminate selling — the moment quality stocks
 # get dumped for the wrong reasons. The backtest showed a single red indicator is
@@ -364,6 +434,145 @@ def fetch_periphery_spread():
     except Exception as exc:
         log.warning(f"ECB periphery-spread fetch failed: {exc}")
         return None, None, None
+
+
+def fetch_fred_series(series_id, n_obs=400):
+    """Fetch a FRED series via the keyless CSV endpoint (no API key needed).
+    Returns a list of float values oldest→newest, or [] on failure. Free, robust:
+    any failure degrades to [] and the indicator shows 'keine Daten' — never crashes.
+    FRED's CSV endpoint can be slow, so we allow a generous timeout + one retry."""
+    last_exc = None
+    for attempt in range(2):
+        try:
+            r = requests.get(FRED_CSV_URL, params={"id": series_id}, timeout=30)
+            r.raise_for_status()
+            out = []
+            for line in r.text.splitlines()[1:]:        # skip header row
+                parts = line.split(",")
+                if len(parts) < 2:
+                    continue
+                v = parts[1].strip()
+                if v in (".", ""):                       # FRED missing-value marker
+                    continue
+                try:
+                    out.append(float(v))
+                except ValueError:
+                    continue
+            return out[-n_obs:] if n_obs else out
+        except Exception as exc:
+            last_exc = exc
+    log.warning(f"FRED fetch failed for {series_id}: {last_exc}")
+    return []
+
+
+def fetch_leading_prices():
+    """yfinance closes for the ratio/divergence Vor-Indikatoren. 6 months is enough
+    for a 60-day average. Returns a Close DataFrame or None on failure."""
+    tickers = ["KRE", "XLF", "RSP", "SPY", "DX-Y.NYB", "^TNX"]
+    try:
+        raw = yf.download(tickers, period="6mo", auto_adjust=True, progress=False)
+        return raw["Close"] if hasattr(raw.columns, "levels") else raw[["Close"]]
+    except Exception as exc:
+        log.warning(f"Leading-indicator price fetch failed: {exc}")
+        return None
+
+
+def _leading_level(value, amber, red, check):
+    """green/amber/red for a leading indicator. Same machinery as the panic
+    indicators, but here it means 'ruhig / erhöht / Stress-Aufbau' — a direction,
+    not a buy trigger."""
+    if check == "above":
+        return "red" if value >= red else ("amber" if value >= amber else "green")
+    return "red" if value <= red else ("amber" if value <= amber else "green")
+
+
+def evaluate_leading():
+    """Evaluate the Vor-Indikatoren (leading stress). PURELY INFORMATIONAL — the
+    returned statuses never enter `alerts`, never touch signal_level()/KAUFSIGNAL.
+    Returns (leading_statuses, raw_leading) where raw_leading logs to leading_history.csv.
+    Every indicator fails soft: a network/parse error yields level 'green' + 'keine Daten'."""
+    statuses = []
+    raw = {}
+    lead_closes = fetch_leading_prices()
+
+    def _series(t):
+        cols = getattr(lead_closes, "columns", [])
+        if lead_closes is None or t not in cols:
+            return None
+        s = lead_closes[t].dropna()
+        return s if not s.empty else None
+
+    for key, cfg in LEADING_INDICATORS.items():
+        kind   = cfg["kind"]
+        level  = "green"
+        value  = None
+        current = "—"
+        compact = "keine Daten"
+        try:
+            if kind == "fred_level":
+                hist = fetch_fred_series(cfg["fred_id"], n_obs=10)
+                if hist:
+                    value   = hist[-1]
+                    level   = _leading_level(value, cfg["amber"], cfg["red"], cfg["check"])
+                    current = f"{_de_num(value, cfg['decimals'])}{cfg['unit']}"
+                    compact = (f"{current} — erhöht ab {_de_num(cfg['amber'], 1)}{cfg['unit']}, "
+                               f"Stress ab {_de_num(cfg['red'], 1)}{cfg['unit']}")
+
+            elif kind == "fred_change":
+                w = cfg["window"]
+                hist = fetch_fred_series(cfg["fred_id"], n_obs=w * 2)
+                if len(hist) > w:
+                    delta_bp = (hist[-1] - hist[-(w + 1)]) * 100   # % points → bp
+                    value    = delta_bp
+                    level    = _leading_level(delta_bp, cfg["amber"], cfg["red"], cfg["check"])
+                    current  = f"{_de_num(delta_bp, 0)}{cfg['unit']} (1 Mt)"
+                    compact  = (f"{current} — erhöht ab +{cfg['amber']}{cfg['unit']}, "
+                                f"Stress ab +{cfg['red']}{cfg['unit']}")
+
+            elif kind == "ratio_below_avg":
+                num = _series(cfg["num"]); den = _series(cfg["den"])
+                if num is not None and den is not None:
+                    ratio = (num / den).dropna()
+                    if len(ratio) > cfg["window"]:
+                        cur = float(ratio.iloc[-1])
+                        avg = float(ratio.iloc[-cfg["window"]:].mean())
+                        pct = (cur / avg - 1) * 100 if avg else 0.0
+                        value   = pct
+                        level   = _leading_level(pct, cfg["amber"], cfg["red"], cfg["check"])
+                        current = f"{_de_num(pct, 1)}% vs {cfg['window']}T-Schnitt"
+                        compact = (f"{current} — erhöht unter {_de_num(cfg['amber'], 1)}%, "
+                                   f"Stress unter {_de_num(cfg['red'], 1)}%")
+
+            elif kind == "divergence_dxy":
+                w = cfg["window"]
+                dxy = _series(cfg["dxy"]); yld = _series(cfg["yield_ticker"])
+                if (dxy is not None and yld is not None
+                        and len(dxy) > w and len(yld) > w):
+                    dxy_chg = (float(dxy.iloc[-1]) / float(dxy.iloc[-w]) - 1) * 100
+                    yld_chg = float(yld.iloc[-1]) - float(yld.iloc[-w])   # % points
+                    diverging = dxy_chg < 0 and yld_chg > 0
+                    if diverging and dxy_chg <= -2 and yld_chg >= 0.3:
+                        level = "red"
+                    elif diverging:
+                        level = "amber"
+                    value   = round(dxy_chg, 2)
+                    sign    = "+" if yld_chg >= 0 else ""
+                    current = f"DXY {_de_num(dxy_chg, 1)}% / 10J {sign}{_de_num(yld_chg, 2)} pp (20T)"
+                    compact = (f"{current} — erhöht: Dollar fällt & Rendite steigt; "
+                               f"Stress: DXY −2 %+ & 10J +0,3 pp+")
+        except Exception as exc:
+            log.warning(f"Leading indicator {key} failed: {exc}")
+
+        statuses.append({
+            "key": key, "level": level, "label": cfg["label"],
+            "lane": cfg["lane"], "explain": cfg.get("explain", ""),
+            "current": current, "compact": compact,
+        })
+        raw[f"lead_{key.lower()}"]       = round(value, 3) if isinstance(value, float) else value
+        raw[f"lead_{key.lower()}_level"] = level
+        log.info(f"LEADING {key}: {current} → {level.upper()}")
+
+    return statuses, raw
 
 
 def check_atlantic_hurricanes():
@@ -786,6 +995,23 @@ def write_to_csv(raw, alert_sent: bool):
             writer.writeheader()
         writer.writerow(raw)
     log.info(f"CSV row written: {raw['date']} | overall={raw['overall_level']}")
+
+
+def write_leading_csv(raw_leading):
+    """Append one row to leading_history.csv (separate from the panic-indicator CSV
+    so adding/removing a Vor-Indikator never disturbs the back-tested main history)."""
+    import csv
+    if not raw_leading:
+        return
+    row  = {"date": date.today().isoformat(), **raw_leading}
+    cols = ["date"] + sorted(raw_leading.keys())
+    exists = LEADING_CSV_PATH.exists()
+    with open(LEADING_CSV_PATH, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
+        if not exists:
+            writer.writeheader()
+        writer.writerow(row)
+    log.info(f"Leading CSV row written: {row['date']}")
 
 
 # ── Email builder ─────────────────────────────────────────────────────────────
@@ -1309,7 +1535,7 @@ def _next_threshold_text(key, level):
     return f"→ {word} {prep} {_de_thr(val, unit)}"
 
 
-def build_heartbeat_message(all_statuses, raw, explanations=True):
+def build_heartbeat_message(all_statuses, raw, explanations=True, leading=None):
     """Weekly 'still alive' ping for quiet days.
 
     Edge-triggered alerts mean silence on unchanged days — which is ambiguous:
@@ -1348,6 +1574,19 @@ def build_heartbeat_message(all_statuses, raw, explanations=True):
         lines.append(f"{icon} <b>{label}</b> {_de_num(val, dec)}{unit} {nxt}")
         if explanations and key in _HEARTBEAT_EXPLAIN:
             lines.append(f"   <i>{_HEARTBEAT_EXPLAIN[key]}</i>")
+
+    # ── Vor-Indikatoren (Stress-Aufbau) — informational, NOT a buy trigger ─────
+    if leading:
+        lines += [
+            "",
+            "📡 <b>Vor-Indikatoren</b> (Stress-Aufbau — zählen NICHT zum Kaufsignal, "
+            "zeigen nur, welches Szenario sich aufheizt):",
+        ]
+        for s in leading:
+            icon = _LEVEL_ICON.get(s["level"], "🟢")
+            lines.append(f"{icon} <b>{s['label']}</b>: {s.get('current', '—')}")
+            if explanations and s.get("explain"):
+                lines.append(f"   <i>{s['explain']}</i>")
 
     lines += [
         "",
@@ -1600,7 +1839,7 @@ def check_and_welcome_new_subscribers(cfg):
 
 # ── Status page generator ─────────────────────────────────────────────────────
 
-def generate_status_html(all_statuses, raw):
+def generate_status_html(all_statuses, raw, leading=None):
     """Rewrite website/status.html with today's indicator readings. Called on every run."""
     import html as _h
 
@@ -1638,6 +1877,47 @@ def generate_status_html(all_statuses, raw):
             f'<div style="font-weight:600;font-size:14px;color:#111827">{label}</div>'
             f'<div style="font-size:13px;color:#4b5563;font-family:monospace;margin-top:2px">{compact}</div>'
             f'</div></div>\n'
+        )
+
+    # ── Vor-Indikatoren (Stress-Aufbau) — separate, informational section ──────
+    # These are leading indicators: they show stress BUILDING, not the panic itself.
+    # They never drive the banner / KAUFSIGNAL — purely "which scenario is heating up".
+    leading_section = ""
+    if leading:
+        lead_rows = ""
+        for s in leading:
+            lvl     = s["level"]
+            l_icon  = ROW_ICON.get(lvl, "⚪")
+            l_bg    = ROW_BG.get(lvl, "#f9fafb")
+            l_bord  = ROW_BORDER.get(lvl, "#e5e7eb")
+            l_label = _h.escape(s["label"])
+            l_lane  = _h.escape(s.get("lane", ""))
+            l_cur   = _h.escape(s.get("current", "—"))
+            l_expl  = _h.escape(s.get("explain", ""))
+            lead_rows += (
+                f'<div style="padding:14px 20px;background:{l_bg};border-bottom:1px solid {l_bord}">'
+                f'<div style="display:flex;align-items:center;gap:16px">'
+                f'<div style="font-size:22px;min-width:28px;text-align:center">{l_icon}</div>'
+                f'<div style="flex:1">'
+                f'<div style="font-weight:600;font-size:14px;color:#111827">{l_label} '
+                f'<span style="font-weight:400;font-size:11px;color:#9ca3af">· {l_lane}</span></div>'
+                f'<div style="font-size:13px;color:#4b5563;font-family:monospace;margin-top:2px">{l_cur}</div>'
+                f'</div></div>'
+                f'<div style="font-size:12px;color:#6b7280;margin-top:6px;padding-left:44px">{l_expl}</div>'
+                f'</div>\n'
+            )
+        leading_section = (
+            '<section style="padding:0 0 48px">'
+            '<div style="max-width:780px;margin:0 auto;padding:0 24px">'
+            '<h2 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:8px">'
+            'Vor-Indikatoren <span style="font-size:14px;font-weight:600;color:#9ca3af">(Stress-Aufbau)</span></h2>'
+            '<p style="font-size:15px;color:#6b7280;margin-bottom:24px">'
+            'Diese Kennzahlen zeigen, ob sich <em>unter der Oberfläche</em> Stress aufbaut — '
+            'früher als die Panik-Indikatoren oben. Sie sind <strong>kein Kaufsignal</strong>, '
+            'sondern zeigen, welches Krisen-Szenario sich aufheizt. Schwellen sind vorläufig.</p>'
+            '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden">'
+            f'{lead_rows}'
+            '</div></div></section>'
         )
 
     # ── Buy opportunities (only when alerts exist) ────────────────────────────
@@ -1736,6 +2016,8 @@ def generate_status_html(all_statuses, raw):
     </div>
   </div>
 </section>
+
+{leading_section}
 
 {buy_section}
 
@@ -2014,6 +2296,14 @@ def main():
 
     alerts, all_statuses, raw = evaluate(closes)
 
+    # Vor-Indikatoren (Stress-Aufbau): leading, informational only. Computed
+    # separately so they can NEVER affect alerts / overall_level / KAUFSIGNAL.
+    try:
+        leading, raw_leading = evaluate_leading()
+    except Exception as exc:
+        log.warning(f"Leading-indicator evaluation failed (non-fatal): {exc}")
+        leading, raw_leading = [], {}
+
     # Edge-triggered: notify only when the signal level CHANGES vs the last run
     # (the previous state is read from the CSV). This stops the daily repeat-pings
     # when nothing has changed — silence means "no change", which is the design.
@@ -2062,7 +2352,7 @@ def main():
     hb_explain = cfg.get("heartbeat_explanations", True)  # per-indicator explainers
     if hb_enabled and not alert_sent and datetime.now().weekday() == hb_weekday:
         try:
-            if send_telegram(cfg, build_heartbeat_message(all_statuses, raw, hb_explain)):
+            if send_telegram(cfg, build_heartbeat_message(all_statuses, raw, hb_explain, leading)):
                 log.info("Heartbeat sent")
                 print(f"[{datetime.now():%Y-%m-%d %H:%M}] Heartbeat sent")
             else:
@@ -2072,7 +2362,8 @@ def main():
             print(f"Heartbeat error (non-fatal): {exc}")
 
     write_to_csv(raw, alert_sent)
-    generate_status_html(all_statuses, raw)
+    write_leading_csv(raw_leading)
+    generate_status_html(all_statuses, raw, leading)
 
 
 if __name__ == "__main__":

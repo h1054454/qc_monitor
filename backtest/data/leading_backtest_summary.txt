@@ -1,0 +1,73 @@
+Wrote backtest\data\leading_backtest_history.csv (786 rows)
+
+==========================================================================
+LEADING-INDICATOR BACKTEST — Vor-Indikatoren vs catalogued crises
+Thresholds (production, provisional): HYOAS 4.5/6.0 · KREXLF -5.0/-10.0
+==========================================================================
+
+### HYOAS — High-Yield-Kreditspread (OAS)
+    metric range: 2.59 .. 4.61 (2023-06-05 → 2026-06-02)
+  GFC 2008               (no data)
+  GFC 2008               (no data)
+  2010 flash crash       (no data)
+  2011 EU/US debt        (no data)
+  2015 China/oil         (no data)
+  2018 Q4 selloff        (no data)
+  2018 Q4 selloff        (no data)
+  COVID                  (no data)
+  2022 bear              (no data)
+  2023 banks (SVB)       (no data)
+  Aug-2024 VIX spike     never red (extreme 3.93)
+  2025 tariff            never red (extreme 4.61)
+
+### KREXLF — KRE/XLF (Regionalbanken relativ)
+    metric range: -21.89 .. 39.66 (2006-09-15 → 2026-06-03)
+  GFC 2008               never red (extreme -6.51)
+  GFC 2008               RED 2009-04-14 (70d before trough) | vs KRE: led 43d
+  2010 flash crash       never red (extreme -2.18)
+  2011 EU/US debt        never red (extreme -3.08)
+  2015 China/oil         never red (extreme -7.96)
+  2018 Q4 selloff        never red (extreme -1.62)
+  2018 Q4 selloff        never red (extreme -7.69)
+  COVID                  RED 2020-03-09 (14d before trough) | vs KRE: lagged 6d
+  2022 bear              never red (extreme -7.43)
+  2023 banks (SVB)       RED 2023-03-13 (52d before trough) | vs KRE: lagged 4d
+  Aug-2024 VIX spike     never red (extreme -3.37)
+  2025 tariff            RED 2025-04-03 (5d before trough) | vs KRE: led 8d
+
+==========================================================================
+FALSE-ALARM RATE (whole history) — red episode = hit if a crisis trough
+falls within 180d after it starts, OR it starts inside a
+crisis peak→trough window; else it is a false alarm.
+==========================================================================
+  HYOAS      0 red episodes | 0 hit / 0 false  → false-alarm 0%
+  KREXLF     5 red episodes | 5 hit / 0 false  → false-alarm 0%
+
+==========================================================================
+THRESHOLD SWEEP — crises-caught vs false-alarm episodes per RED threshold
+(pick a rounded red threshold near the knee: catches the real crises,
+ few false alarms. amber is set looser for earlier 'attention'.)
+==========================================================================
+
+  HYOAS (above):  red-threshold → crises-with-a-red / false-alarm episodes
+       4.0  →   1/12 crises   |   3 false alarms
+       4.5  →   1/12 crises   |   1 false alarms
+       5.0  →   0/12 crises   |   0 false alarms
+       5.5  →   0/12 crises   |   0 false alarms
+       6.0  →   0/12 crises   |   0 false alarms
+       6.5  →   0/12 crises   |   0 false alarms
+       7.0  →   0/12 crises   |   0 false alarms
+
+  KREXLF (below):  red-threshold → crises-with-a-red / false-alarm episodes
+        -4  →   8/12 crises   |  30 false alarms
+        -5  →   8/12 crises   |  18 false alarms
+        -6  →   8/12 crises   |   9 false alarms
+        -8  →   4/12 crises   |   2 false alarms
+       -10  →   4/12 crises   |   0 false alarms
+       -12  →   3/12 crises   |   2 false alarms
+
+==========================================================================
+Reading: leading indicators warn EARLY and noisily. A good red threshold
+catches the relevant crises with an acceptable false-alarm count — it is
+NOT a buy trigger (they stay out of the >=3 KAUFSIGNAL by design).
+==========================================================================
