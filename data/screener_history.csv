@@ -274,3 +274,28 @@ date,ticker,name,index,price,trailing_pe,pe_amber,pe_red,pe_score,high_52w,drawd
 2026-07-27,CME,CME Group,S&P500,255.31,21.64,20.0,17.0,watch,317.19,-19.5,interesting,★ WATCH,204.0,3.47
 2026-07-27,ADP,ADP,S&P500,250.09,23.31,25.0,20.0,amber_buy,302.53,-17.3,interesting,★★ BUY,272.0,15.78
 2026-07-27,BR,Broadridge Financial,S&P500,148.92,15.93,27.0,22.0,red_buy,261.51,-43.1,compelling,★★★ STRONG BUY,262.0,6.11
+2026-08-03,EBS.VI,Erste Group Bank,ATX,114.9,12.84,4.5,3.5,fair,118.9,-3.4,fair,—,66.0,1.84
+2026-08-03,VIG.VI,Vienna Insurance Group,ATX,71.4,11.05,9.0,7.5,watch,71.4,0.0,fair,—,244.0,1.33
+2026-08-03,OMV.VI,OMV AG,ATX,63.45,17.82,6.5,5.0,fair,64.8,-2.1,fair,—,499.0,1.3
+2026-08-03,RBI.VI,Raiffeisen Bank Int'l,ATX,59.65,8.32,4.0,3.0,fair,59.65,0.0,fair,—,269.0,
+2026-08-03,ANDR.VI,Andritz AG,ATX,82.9,17.49,11.5,9.5,fair,82.9,0.0,fair,—,333.0,3.34
+2026-08-03,EVN.VI,EVN AG,ATX,29.25,10.45,10.5,8.5,amber_buy,30.3,-3.5,fair,—,307.0,0.79
+2026-08-03,ALV.DE,Allianz SE,DAX,433.2,13.99,8.0,6.5,fair,433.2,0.0,fair,—,395.0,2.49
+2026-08-03,MUV2.DE,Munich Re,DAX,520.4,9.97,10.0,8.5,amber_buy,580.1,-10.3,interesting,★★ BUY,460.0,1.92
+2026-08-03,HNR1.DE,Hannover Rück,DAX,250.8,10.53,11.0,9.0,amber_buy,264.85,-5.3,watch,★ WATCH,499.0,2.18
+2026-08-03,DB1.DE,Deutsche Börse,DAX,264.7,22.84,17.0,14.0,fair,270.5,-2.1,fair,—,160.0,4.61
+2026-08-03,DHL.DE,DHL Group,DAX,58.0,18.77,10.0,8.0,fair,58.0,0.0,fair,—,329.0,2.77
+2026-08-03,RWE.DE,RWE AG,DAX,56.42,17.31,6.5,5.0,fair,60.78,-7.2,watch,—,210.0,1.14
+2026-08-03,CINF,Cincinnati Financial,S&P500,177.68,8.39,8.5,7.0,amber_buy,192.03,-7.5,watch,★ WATCH,212.0,1.63
+2026-08-03,TRV,Travelers,S&P500,374.36,10.06,8.0,6.5,fair,397.22,-5.8,watch,—,134.0,2.36
+2026-08-03,CB,Chubb,S&P500,350.68,12.42,10.0,8.0,watch,363.5,-3.5,fair,—,116.0,1.79
+2026-08-03,PGR,Progressive,S&P500,211.42,10.6,9.0,7.5,watch,237.26,-10.9,interesting,★ WATCH,657.0,3.58
+2026-08-03,ACGL,Arch Capital Group,S&P500,100.53,7.87,6.5,5.5,watch,106.48,-5.6,watch,—,,1.47
+2026-08-03,USB,U.S. Bancorp,S&P500,63.01,12.58,10.0,8.0,fair,64.47,-2.3,fair,—,330.0,1.62
+2026-08-03,MTB,M&T Bank,S&P500,246.29,13.04,10.0,8.0,fair,254.04,-3.1,fair,—,244.0,1.4
+2026-08-03,WFC,Wells Fargo,S&P500,86.45,12.57,9.5,8.0,fair,95.37,-9.4,watch,—,231.0,1.63
+2026-08-03,AFL,Aflac Inc.,S&P500,127.48,14.57,9.0,7.5,fair,129.55,-1.6,fair,—,191.0,2.17
+2026-08-03,WRB,W.R. Berkley,S&P500,72.54,14.93,12.0,10.0,watch,76.44,-5.1,watch,—,55.0,
+2026-08-03,CME,CME Group,S&P500,267.79,22.73,20.0,17.0,watch,317.19,-15.6,interesting,★ WATCH,194.0,3.63
+2026-08-03,ADP,ADP,S&P500,266.46,24.33,25.0,20.0,amber_buy,300.67,-11.4,interesting,★★ BUY,255.0,16.81
+2026-08-03,BR,Broadridge Financial,S&P500,153.95,16.48,27.0,22.0,red_buy,261.51,-41.1,compelling,★★★ STRONG BUY,253.0,6.32
