@@ -137,3 +137,4 @@ date,vix,vix_level,kre_price,kre_14d_pct,kre_level,qqq_price,qqq_52w_pct,qqq_lev
 2026-11-12,18.88,green,72.66,0.28,green,683.2,-10.07,amber,155.61,-34.96,amber,93.39,green,green,5.02,amber,92.43,green,58.6,amber,0,green,amber,False
 2026-11-13,17.81,green,72.52,0.08,green,688.17,-9.41,green,166.19,-30.53,amber,96.28,green,green,5.13,amber,98.43,green,58.4,amber,0,green,amber,False
 2026-11-16,20.47,amber,72.7,0.17,green,670.11,-11.79,amber,161.94,-32.31,amber,93.7,green,green,5.14,amber,98.79,green,59.2,amber,0,green,amber,False
+2026-11-17,22.81,amber,71.85,-0.37,green,659.43,-13.19,amber,154.24,-35.53,red,93.45,green,green,5.14,amber,101.35,amber,60.4,amber,0,green,amber,False
